@@ -139,7 +139,7 @@ That is the honest case for AI as a tool. It did not replace an engineer. It let
 
 == Why AsciiDoc, and why this site is written in it
 
-link:/glossary/#_asciidoc[AsciiDoc] has a regular grammar and native `<<anchor>>` cross-references that map straight onto graph edges. A document written in it is already a referential structure, so Aden can compile prose into the same graph as code and answer "is this documented" or "did the docs drift from the signature" as graph queries. That is why Aden reads and writes AsciiDoc, and it is why this whole site is authored in it. The place I write about the tool runs on the same substrate the tool is built on.
+link:/glossary/#_asciidoc[AsciiDoc] has a regular grammar and native `+<<anchor>>+` cross-references that map straight onto graph edges. A document written in it is already a referential structure, so Aden can compile prose into the same graph as code and answer "is this documented" or "did the docs drift from the signature" as graph queries. That is why Aden reads and writes AsciiDoc, and it is why this whole site is authored in it. The place I write about the tool runs on the same substrate the tool is built on.
 
 == Try it
 

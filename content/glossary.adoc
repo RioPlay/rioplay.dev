@@ -11,7 +11,7 @@ Every recurring term on this site is defined here once. Posts link to these anch
 
 [.glossary]
 [[_asciidoc]]AsciiDoc::
-A plain-text writing format with a regular grammar, cross-references (`<<anchor>>`), includes, and attributes. Because it is text with structure rather than prose in a binary file, it can be parsed into a graph. It is the source format for this site and a first-class input for <<_aden,Aden>>. +
+A plain-text writing format with a regular grammar, cross-references (`+<<anchor>>+`), includes, and attributes. Because it is text with structure rather than prose in a binary file, it can be parsed into a graph. It is the source format for this site and a first-class input for <<_aden,Aden>>. +
 [.ref]#Reference: https://docs.asciidoctor.org/asciidoc/latest/[AsciiDoc Language documentation^]#
 
 [[_aden]]Aden::
