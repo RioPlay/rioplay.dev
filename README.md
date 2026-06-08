@@ -1,6 +1,6 @@
 # rioplay.dev
 
-The source for [rioplay.dev](https://rioplay.dev) — a knowledge-base-flavored blog about
+The source for [blog.rioplay.dev](https://blog.rioplay.dev) — a knowledge-base-flavored blog about
 **Aden** and AI-native developer tooling, by RioPlay.
 
 Built with [Hugo](https://gohugo.io) + [PaperMod](https://github.com/adityatelange/hugo-PaperMod),
@@ -103,5 +103,5 @@ Connect the repo in the Cloudflare dashboard with:
 - Output directory: `public`
 - Environment variable: `HUGO_VERSION = 0.162.0`
 
-Then point the `rioplay.dev` custom domain at the Pages project in the dashboard.
+Then point the `blog.rioplay.dev` custom domain at the Pages project in the dashboard.
 ```

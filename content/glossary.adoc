@@ -1,6 +1,6 @@
 ---
 title: "Glossary"
-summary: "Every recurring term on rioplay.dev, defined once, with a link to its canonical source. Posts link here instead of re-explaining."
+summary: "Every recurring term on blog.rioplay.dev, defined once, with a link to its canonical source. Posts link here instead of re-explaining."
 url: "/glossary/"
 ShowToc: true
 TocOpen: true
