@@ -1,0 +1,85 @@
+{{- /* Mermaid diagrams.
+       Author them in AsciiDoc as a roled listing block:
+
+         [.mermaid]
+         ----
+         flowchart LR
+           A --> B
+         ----
+
+       Asciidoctor emits <div class="listingblock mermaid"><pre>...</pre></div>.
+       We render it client-side so it can follow the dark/light toggle, and load
+       the Mermaid library only on pages that actually contain a diagram. */ -}}
+<script type="module">
+(async () => {
+  const blocks = Array.from(document.querySelectorAll('.listingblock.mermaid'));
+  if (!blocks.length) return;
+
+  // Hugo's asciidocext renderer escapes <, >, & as \uXXXX in listing blocks.
+  // Decode those back before handing the source to Mermaid.
+  const decode = (s) => s.replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+
+  let mermaid;
+  try {
+    mermaid = (await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs')).default;
+  } catch (e) {
+    // Library failed to load: reveal the source instead of hiding it.
+    blocks.forEach((el) => { el.style.display = ''; });
+    return;
+  }
+
+  // Replace each source block with a figure that remembers its source, so we
+  // can re-render from scratch when the theme changes.
+  const holders = blocks.map((el, i) => {
+    const raw = el.querySelector('pre')?.textContent ?? '';
+    const fig = document.createElement('figure');
+    fig.className = 'mermaid-figure';
+    const holder = document.createElement('div');
+    holder.className = 'mermaid-diagram';
+    holder.id = 'mmd-' + i;
+    holder.dataset.src = decode(raw);
+    fig.appendChild(holder);
+    el.replaceWith(fig);
+    return holder;
+  });
+
+  // Decide dark vs light from the actual rendered background, so it works
+  // whether the theme is set explicitly or via system preference.
+  const isDark = () => {
+    const v = getComputedStyle(document.documentElement).getPropertyValue('--theme').trim();
+    const n = v.match(/\d+/g);
+    if (!n) return document.documentElement.dataset.theme === 'dark';
+    const [r, g, b] = n.map(Number);
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) < 128;
+  };
+
+  let busy = false;
+  async function renderAll() {
+    if (busy) return;
+    busy = true;
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+      theme: isDark() ? 'dark' : 'default',
+    });
+    for (const h of holders) {
+      try {
+        const { svg } = await mermaid.render(h.id + '-svg', h.dataset.src);
+        h.innerHTML = svg;
+      } catch (e) {
+        h.innerHTML = '<pre class="mermaid-error">diagram error: ' + (e && e.message ? e.message : e) + '</pre>';
+      }
+    }
+    busy = false;
+  }
+
+  await renderAll();
+
+  // Re-render when the theme toggle flips html[data-theme], or system changes.
+  let raf;
+  const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(renderAll); };
+  new MutationObserver(schedule).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', schedule);
+})();
+</script>

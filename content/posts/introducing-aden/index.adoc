@@ -61,6 +61,15 @@ The questions a coding agent needs answered are "what calls this," "what depends
 
 So Aden builds the graph those tools never produce. It parses source with link:/glossary/#_tree_sitter[tree-sitter], resolves symbols and references, and stores the result as a directed graph. Every function, module, and decision is a node. Every relationship is a link:/glossary/#_typed_edge[typed edge] carrying a label: `calls`, `uses`, `constrains`, `documents`. The label is the whole point. It is what makes "what _calls_ this?" a precise query instead of a fuzzy one.
 
+[.mermaid]
+----
+flowchart LR
+  S[Source code] -->|tree-sitter| P[Parse symbols and refs]
+  P --> G[(Typed graph)]
+  G -->|budgeted assembly| C[Connected context]
+  C --> A([AI agent])
+----
+
 Three edge directions surface as commands:
 
 * definition to reference, through `locate` and `grep`
