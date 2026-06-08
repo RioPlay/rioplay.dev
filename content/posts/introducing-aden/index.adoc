@@ -143,21 +143,38 @@ link:/glossary/#_asciidoc[AsciiDoc] has a regular grammar and native `+<<anchor>
 
 == Try it
 
+Compile a codebase into the graph. The read commands do this on demand too, so the step is optional:
+
 [source,bash]
 ----
-# Compile a codebase into the graph (read commands also do this on demand)
 aden gen . --auto
+----
 
-# Natural-language question, answered from real structure
+Ask a natural-language question, answered from real structure:
+
+[source,bash]
+----
 aden ask "How does login work?"
+----
 
-# Who depends on this symbol? (anchor comes from locate/grep)
+See who depends on a symbol. The anchor comes from `locate` or `grep`:
+
+[source,bash]
+----
 aden query --backlinks "aden://module/auth/login.adoc#code_block_3"
+----
 
-# Blast radius of your current git diff, before you commit
+Get the blast radius of your current git diff, before you commit:
+
+[source,bash]
+----
 aden impact-diff
+----
 
-# Build with hybrid retrieval, then expose the tools to your agent
+Build with hybrid retrieval, then expose the tools to your agent:
+
+[source,bash]
+----
 cargo build -p aden-cli --features dense
 aden mcp install --platform claude
 ----
