@@ -6,6 +6,9 @@
 # Asciidoctor diagram cache (lands next to .adoc sources)
 .asciidoctor/
 
+# Aden index config (local tooling, not site content)
+.adenignore
+
 # Pagefind (if used) output
 /public/pagefind/
 
