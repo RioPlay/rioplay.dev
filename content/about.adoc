@@ -11,9 +11,21 @@ I'm RioPlay. I like taking things apart to see what else they can do, and this i
 
 == Where this started
 
-My first real personal computer was a Chromebook. It was supposed to be a browser with a keyboard attached, a locked-down thing that did a short list of approved tasks and nothing else. I spent a lot of my time growing up ignoring that list. Most of what I know now started as me trying to make that little machine do something it was never meant to, then figuring out why it broke when I did.
+I have been messing with computers for about as long as I can remember. What hooked me was simple: there seemed to be no bottom to them, an almost limitless number of directions to wander off in and learn.
+
+My first real personal computer was an Acer C720 Chromebook, with all of 2 GB of RAM. It was meant to be a browser with a keyboard attached, a locked-down thing that did a short list of approved tasks and nothing else. I spent most of my time with it ignoring that list.
+
+It started modestly. I "dual booted" in the loosest sense of the phrase, chrooting into an Ubuntu instance alongside ChromeOS because that was the easy path back then. I had no idea I was paging to disk as hard as I was on a 2 GB machine. It just felt slow, and I kept going anyway. Then I kept learning. I flipped the device into developer mode, got it booting raw Linux, and started peeling things back to fit the hardware, working down through desktop environments until I landed on the light ones: XFCE, and then LXDE. I am fairly sure it was LXDE, since it was the earlier option at the time. Some of the details are hazy now, it was a long time ago.
+
+The part I will never forget is getting that little 1366x768 panel to run Minecraft at a miraculous 60 frames per second. Somewhere in all of it I picked up the command-line navigation and everyday Linux habits I still lean on, and the whole experience jumpstarted an interest in computers that only grew from there.
 
 That habit never went away. It just moved on to bigger machines and harder problems.
+
+== What I actually do
+
+I am not a developer at my core, and I would rather say that plainly than pretend otherwise. I work in IT. I started out on the service desk and have since moved up the chain. In my own time I run a homelab, which is mostly a license to break things on purpose and learn how they really work.
+
+That background shapes how I build. I come at software the way a sysadmin comes at a broken system: poke it, watch what it does, form a theory, test it, repeat. Troubleshooting is the real skill, and it transfers further than people expect.
 
 == What this site is
 
@@ -27,6 +39,14 @@ A couple of corners worth knowing about:
 * The link:/archives/[Archive] is the full index of everything published.
 
 The site is built with Hugo and written in AsciiDoc, the same plain-text format Aden reads. I liked the idea of writing about the tool on the same substrate the tool is built on.
+
+== A note on AI
+
+Aden was built with heavy AI assistance, and I am not going to bury that. It is one of the more interesting parts of the story.
+
+Getting an AI to help build something genuinely new, instead of a slightly reworded copy of what already exists, is not a matter of asking nicely. It took a lot of direction, correction, and plain stubbornness to bend the tool toward an idea it had no template for, and to hold the result to a standard I was happy to put my name on. The polish is not something the model handed me. It is the part I worked hardest on.
+
+I treat AI as exactly that, a tool, only as useful as the person wielding it. It did not replace me. It took the laborious, time-consuming work off my plate so I could spend my attention on the decisions that actually needed a person. Used that way it is the most leverage I have ever had as one person, and I would rather you see what it let me build than dismiss it for the label.
 
 == Elsewhere
 

@@ -75,7 +75,7 @@ pygmentsUseClasses = true
 # ---------------------------------------------------------------------------
 [params]
   env = "production"             # enables sitemap, robots, opengraph, schema, twitter cards
-  description = "Notes on Aden, AI-native developer tooling, and building in public, by RioPlay."
+  description = "Notes on Aden, the things I build, and what I learn along the way, by RioPlay."
   keywords = ["Aden", "AI tooling", "developer tools", "knowledge graph", "Rust", "AsciiDoc"]
   author = "RioPlay"
   DateFormat = "January 2, 2006"
@@ -97,7 +97,7 @@ pygmentsUseClasses = true
   # Clean home landing: short intro + social links (PaperMod "home-info" mode).
   [params.homeInfoParams]
     Title = "RioPlay"
-    Content = "I build AI-native developer tooling. Right now that means **Aden**, a referential context compiler that turns any codebase into a queryable knowledge graph. This is where I write about how it works, why it's built the way it is, and what I learn shipping it in public. Start with the [Aden series](/series/aden/) or browse the [glossary](/glossary/)."
+    Content = "I work in IT and tinker constantly. My main project right now is **Aden**, a referential context compiler that turns any codebase into a queryable knowledge graph. This is where I write about it, and about whatever else I happen to be building, breaking, or learning. Start with the [Aden series](/series/aden/) or browse the [glossary](/glossary/)."
 
   [[params.socialIcons]]
     name = "github"
