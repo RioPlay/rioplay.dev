@@ -170,10 +170,12 @@ Aden reindexes on read, so it has no warm daemon and none of the sub-millisecond
 
 This is the first post in link:/series/aden/[the Aden series]. The next ones go deeper: the retrieval stack end to end, the graph algorithms, and how the whole thing holds up on codebases I did not write.
 
+Aden is open source under AGPL-3.0. The code, the docs, and the eval harness behind the numbers above all live at https://github.com/RioPlay/aden[github.com/RioPlay/aden^]. If any of this is interesting, that is the place to dig in.
+
 [.sources]
 == Sources
 
-. Aden source and docs: `README.md`, `docs/philosophy.adoc`, `docs/architecture.adoc`, and the ADRs in `docs/`.
+. Aden source and docs: the https://github.com/RioPlay/aden[Aden repository^] (`README.md`, `docs/philosophy.adoc`, `docs/architecture.adoc`, and the ADRs in `docs/`).
 . Retrieval evaluation: `crates/aden-index/tests/eval_corpus.rs` and `scripts/eval_corpus.py`, run over a Linux-kernel subset and `create-t3-app`.
 . G. Cormack, C. Clarke, S. Buettcher, https://dl.acm.org/doi/10.1145/1571941.1572114["Reciprocal Rank Fusion outperforms Condorcet and individual rank learning methods," SIGIR 2009^].
 . Components referenced above: https://tree-sitter.github.io/tree-sitter/[tree-sitter^] (parsing), https://huggingface.co/BAAI/bge-small-en-v1.5[BAAI/bge-small-en-v1.5^] embeddings on the https://github.com/sonos/tract[tract^] runtime, and the https://modelcontextprotocol.io[Model Context Protocol^].
