@@ -1,0 +1,163 @@
+---
+title: "Introducing Aden: giving coding agents a map of the codebase"
+slug: "introducing-aden"
+date: 2026-06-07
+lastmod: 2026-06-07
+draft: false
+summary: "Drop an AI model into a 100,000-line codebase and it guesses at which files matter, badly. I spent two weeks building Aden so it doesn't have to. Here is what it does, how it works, and the numbers behind the retrieval rewrite."
+description: "Aden compiles a codebase or documentation set into a queryable knowledge graph so coding agents can assemble exactly the context a task needs, within a token budget, fully offline. A grounded introduction with real benchmarks."
+series: ["Aden"]
+categories: ["Aden"]
+tags: ["aden", "ai-tooling", "developer-tools", "knowledge-graph", "rust", "asciidoc", "retrieval"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+Drop a capable AI model into a codebase of a hundred thousand lines and it hits the same wall a new engineer does. It cannot tell which ten files out of five hundred matter for the task. It does not know that changing `Database::connect()` will break `QueueWorker::drain()`. It has no map.
+
+[NOTE]
+.The short version
+====
+Aden compiles a codebase or documentation set into a queryable link:/glossary/#_knowledge_graph[knowledge graph]. Every symbol becomes a node, and every call, import, and constraint becomes a typed edge. You then ask for exactly the context a task needs, within a link:/glossary/#_token_budget[token budget], fully offline, across 300-plus languages. I started it on 23 May 2026 and I write about it here as I go.
+====
+
+== A model reading through a keyhole
+
+The context window is the binding constraint, not the model. Today's models reason well. They just read through a keyhole, and a real codebase does not fit through it.
+
+The obvious workaround, pasting the whole repository into the prompt, makes things worse. Every token the model reads costs budget and dilutes the signal around it. What actually helps is the connected slice of the codebase, assembled for the specific task, with everything else left out. That is a retrieval problem, and it is harder than it looks.
+
+[quote]
+____
+The hard constraint in AI-assisted development is context, not model intelligence.
+____
+
+== Why grep, ctags, LSP, and embeddings each miss
+
+Before building anything I wrote down why the tools already on my disk could not answer the question an agent actually asks. Each one misses in its own way.
+
+[cols="1,3",options="header"]
+|===
+| Tool | What it cannot tell an agent
+
+| `grep` / ripgrep
+| Where a string appears, but not which hits are definitions, which are call sites, or who calls those callers. It is blind to the symbol graph.
+
+| ctags / cscope
+| Symbol locations in a flat tag table. No transitive impact (what breaks downstream if this changes), language-specific, and code and prose live in separate worlds.
+
+| LSP
+| Plenty, but only if you already know a symbol's `file:line:column`. You have to know where something is before you can ask about it, and it indexes no documentation.
+
+| Vector embeddings
+| Code that looks similar, which is not the same as code that is connected. The function that calls `auth_middleware` is usually written nothing like `auth_middleware`, so similarity search walks right past the call chain.
+|===
+
+The questions a coding agent needs answered are "what calls this," "what depends on this type," and "what is the link:/glossary/#_blast_radius[blast radius] if I rename it." Those are graph traversals. No embedding model, however good, answers them from similarity alone, because they are not similarity questions.
+
+== Aden's answer is a typed graph
+
+So Aden builds the graph those tools never produce. It parses source with link:/glossary/#_tree_sitter[tree-sitter], resolves symbols and references, and stores the result as a directed graph. Every function, module, and decision is a node. Every relationship is a link:/glossary/#_typed_edge[typed edge] carrying a label: `calls`, `uses`, `constrains`, `documents`. The label is the whole point. It is what makes "what _calls_ this?" a precise query instead of a fuzzy one.
+
+Three edge directions surface as commands:
+
+* definition to reference, through `locate` and `grep`
+* caller to callee, through `query --backlinks`
+* upstream to downstream, through `query --impact`
+
+Roughly a dozen languages get deep extraction, with full call graphs, signatures, and doc comments: Rust, Python, Go, TypeScript and JavaScript, Java, C#, C, Ruby, PHP, Kotlin, PowerShell. Another 300-plus get symbol-level extraction through tree-sitter. The grammars are compiled into the binary, so parsing never touches the network.
+
+Aden does not hunt for bugs and it does not render HTML. clippy and Semgrep already do the first, rustdoc already does the second. Aden produces the connected map those tools assume you already have in your head.
+
+== Assembling context to a budget
+
+Having a graph is half the work. Spending an agent's limited tokens well is the other half.
+
+The `asm` command walks the graph outward from a starting anchor in a fixed priority order, most structurally load-bearing edges first (`Calls`, then `Uses`, then containment), stops at a depth (three by default), estimates tokens at about four bytes each, and fills an 8,192-token budget. The budget is a hard cap. A final document that would overflow gets truncated at a word boundary rather than pushing past the limit. Because the traversal order is deterministic, the same source always assembles the same context, which matters when you want reproducible behavior out of an agent.
+
+The graph stays fresh by construction. The read commands (`ask`, `asm`, `query`, `locate`, `grep`) detect files that changed since the last run and reindex them before answering, so you rarely run a build step and you never query a stale map. The compiled graph lives in a per-user store outside the working tree, an fjall LSM-tree keyed by project. Delete it and the next read rebuilds it deterministically from source. The source code stays the single source of truth.
+
+== Two weeks in, the retrieval rewrite
+
+The first commit landed on 23 May 2026. A couple of hundred commits later, the part I most wanted to get right was ranking, and it was the part most obviously broken.
+
+Default retrieval is link:/glossary/#_bm25[BM25], the classic lexical ranker. It is exact and explainable, and it has a failure mode I kept hitting in my own evaluation set, logged as defect M14. A rare verb in the query, say "detect," picks up a high inverse-document-frequency weight and outranks the subject nouns that actually identify the target. So `ask "detect drift between code and docs"` would route to a thin, wrong symbol because one uncommon word dominated the score.
+
+The fix is the standard one from the information-retrieval literature. Run a link:/glossary/#_dense_retrieval[dense semantic search] alongside BM25 and fuse the two ranked lists with link:/glossary/#_rrf[Reciprocal Rank Fusion] (Cormack, Clarke and Buettcher, SIGIR 2009), with the paper's constant of 60. RRF needs no training and no score normalization, which is exactly why it is a good fit for a tool that has to stay deterministic. The embeddings run locally through a pure-Rust ONNX runtime (`tract`) with the BAAI/bge-small-en-v1.5 model, 384 dimensions, about 127 MB, MIT-licensed. It sits behind an opt-in build flag and the whole path stays offline.
+
+The first version of this was unusable. It re-embedded the entire corpus on every reindex, so noticing a single edited file on the Linux subset took about 71 seconds. The next change was a content-addressed embedding cache keyed by each symbol's source hash, so a reindex only re-embeds what actually changed. That same one-file edit now settles in roughly 2.5 seconds.
+
+Then I measured the thing instead of trusting that it felt better. On a subset of the Linux kernel, 4,114 real `.c` files and about 134,800 symbols, against 199 queries:
+
+[cols="3,1,1,1",options="header"]
+|===
+| Linux subset (199 queries) | R@1 | R@5 | MRR@20
+
+| BM25 (lexical only)
+| 0.362
+| 0.472
+| 0.417
+
+| Hybrid (BM25 + dense, fused with RRF)
+| *0.487*
+| *0.673*
+| *0.571*
+|===
+
+That is a 35% relative lift at rank 1 and 43% at rank 5, and outright misses dropped from 78 to 36 out of 199. A smaller run on `create-t3-app` moved R@1 from 0.229 to 0.371. Hybrid won on both, and the lead widened on the larger corpus.
+
+[IMPORTANT]
+.Where these numbers are honest, and where they are not
+====
+I ran these myself, with single-target ground truth: exactly one "correct" file per query. A result that surfaces an equally valid sibling file still counts as a miss, so real usefulness sits above the raw recall. This is file-level routing, not end-to-end task success, and it is one corpus with labels I wrote. Indicative, not a standardized benchmark. The honest cost line: the first embedding pass over that Linux subset took about 24 minutes on CPU, once, before the incremental cache made every later reindex cheap.
+====
+
+Two more capabilities landed in the same stretch and reuse machinery that was already there. `aden impact-diff` maps a git diff to the symbols it touches and runs the impact traversal from each, so a change can report its own link:/glossary/#_blast_radius[blast radius] before you commit it. `aden communities` groups densely connected symbols with link:/glossary/#_community_detection[deterministic Louvain modularity], which gives `ask` a sensible fallback when it would otherwise dump the project root.
+
+== The one rule I set for myself
+
+Every capability above is a published technique with a paper anyone can implement: BM25, Reciprocal Rank Fusion, Louvain modularity, dense retrieval, tree-sitter. I cite the other code-intelligence tools as evidence that a feature matters to people, never as source to copy. Where a permissively licensed crate already implements a standard algorithm, Aden depends on it and credits it. That line keeps the project clean, and honestly it makes the work more interesting, because implementing a method from its paper teaches you why it works.
+
+== Why AsciiDoc, and why this site is written in it
+
+link:/glossary/#_asciidoc[AsciiDoc] has a regular grammar and native `<<anchor>>` cross-references that map straight onto graph edges. A document written in it is already a referential structure, so Aden can compile prose into the same graph as code and answer "is this documented" or "did the docs drift from the signature" as graph queries. That is why Aden reads and writes AsciiDoc, and it is why this whole site is authored in it. The place I write about the tool runs on the same substrate the tool is built on.
+
+== Try it
+
+[source,bash]
+----
+# Compile a codebase into the graph (read commands also do this on demand)
+aden gen . --auto
+
+# Natural-language question, answered from real structure
+aden ask "How does login work?"
+
+# Who depends on this symbol? (anchor comes from locate/grep)
+aden query --backlinks "aden://module/auth/login.adoc#code_block_3"
+
+# Blast radius of your current git diff, before you commit
+aden impact-diff
+
+# Build with hybrid retrieval, then expose the tools to your agent
+cargo build -p aden-cli --features dense
+aden mcp install --platform claude
+----
+
+That last command matters most for agents. Aden ships an link:/glossary/#_mcp[MCP] server, so an assistant in your editor queries the same graph you do from the terminal.
+
+== What it is not good at yet
+
+Aden reindexes on read, so it has no warm daemon and none of the sub-millisecond socket queries some tools advertise. The first dense embedding pass is a real one-time cost. It does not do semantic editing, the LSP-grounded rename and move that a tool like Serena offers. The clustering is Louvain without the Leiden refinement that guarantees connected communities. And it is pre-public, so adoption is zero, which is the widest gap of all and the one code cannot close by itself. Writing this series is part of closing it.
+
+This is the first post in link:/series/aden/[the Aden series]. The next ones go deeper: the retrieval stack end to end, the graph algorithms, and how the whole thing holds up on codebases I did not write.
+
+[.sources]
+== Sources
+
+. Aden source and docs: `README.md`, `docs/philosophy.adoc`, `docs/architecture.adoc`, and the ADRs in `docs/`.
+. Retrieval evaluation: `crates/aden-index/tests/eval_corpus.rs` and `scripts/eval_corpus.py`, run over a Linux-kernel subset and `create-t3-app`.
+. G. Cormack, C. Clarke, S. Buettcher, https://dl.acm.org/doi/10.1145/1571941.1572114["Reciprocal Rank Fusion outperforms Condorcet and individual rank learning methods," SIGIR 2009^].
+. Components referenced above: https://tree-sitter.github.io/tree-sitter/[tree-sitter^] (parsing), https://huggingface.co/BAAI/bge-small-en-v1.5[BAAI/bge-small-en-v1.5^] embeddings on the https://github.com/sonos/tract[tract^] runtime, and the https://modelcontextprotocol.io[Model Context Protocol^].
+. The link:/glossary/[site glossary] defines and sources every term used above. This site is built with https://asciidoctor.org[Asciidoctor^].

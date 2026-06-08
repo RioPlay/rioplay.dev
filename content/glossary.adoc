@@ -1,0 +1,83 @@
+---
+title: "Glossary"
+summary: "Every recurring term on rioplay.dev, defined once, with a link to its canonical source. Posts link here instead of re-explaining."
+url: "/glossary/"
+ShowToc: true
+TocOpen: true
+ShowReadingTime: false
+---
+[.lead]
+Every recurring term on this site is defined here once. Posts link to these anchors instead of re-explaining, so a definition lives in exactly one place. It is the same convention the project's own knowledge base uses. Where a term comes from a paper or a project, the canonical source is linked too, so you can go a level deeper without hunting.
+
+[.glossary]
+[[_asciidoc]]AsciiDoc::
+A plain-text writing format with a regular grammar, cross-references (`<<anchor>>`), includes, and attributes. Because it is text with structure rather than prose in a binary file, it can be parsed into a graph. It is the source format for this site and a first-class input for <<_aden,Aden>>. +
+[.ref]#Reference: https://docs.asciidoctor.org/asciidoc/latest/[AsciiDoc Language documentation^]#
+
+[[_aden]]Aden::
+A <<_referential_context_compiler,referential context compiler>>: it compiles code and documentation into a <<_knowledge_graph,knowledge graph>> that humans and AI agents can query for exactly the context a task needs. See link:/series/aden/[the Aden series].
+
+[[_blast_radius]]Blast radius::
+Everything a change can affect downstream. If you alter a function, its blast radius is every symbol that transitively depends on it. <<_aden,Aden>> answers this by walking <<_typed_edge,typed edges>> rather than guessing. Also called <<_impact_analysis,impact analysis>>.
+
+[[_bm25]]BM25::
+A classic keyword-ranking function that scores documents by term overlap with a query. It is fast and exact for shared vocabulary but blind to meaning, so it cannot tell that "login" and "authenticate" are related. Paired with <<_dense_retrieval,dense retrieval>> in <<_hybrid_retrieval,hybrid retrieval>>. +
+[.ref]#Reference: https://en.wikipedia.org/wiki/Okapi_BM25[Okapi BM25^] and https://www.staff.city.ac.uk/~sbrp622/papers/foundations_bm25_review.pdf[Robertson & Zaragoza, "BM25 and Beyond" (PDF)^]#
+
+[[_cluster]]Cluster (content)::
+The specific posts that answer narrow questions under a broad topic, all linking up to a <<_pillar_page,pillar page>>. Pillar plus cluster is how this site organizes a subject so both readers and search engines see the topical structure.
+
+[[_community_detection]]Community detection::
+Finding groups of nodes that are more connected to each other than to the rest of a graph. <<_aden,Aden>> uses the deterministic Louvain algorithm to surface natural module boundaries in a codebase, even when the directory layout hides them. +
+[.ref]#References: https://arxiv.org/abs/0803.0476[Louvain, Blondel et al. 2008 (arXiv)^] and https://arxiv.org/abs/1810.08473[Leiden, Traag et al. 2019 (arXiv)^]#
+
+[[_dense_retrieval]]Dense retrieval::
+Search by meaning rather than shared words, using <<_embedding,embeddings>>. It finds code that is conceptually related even with no vocabulary in common. <<_aden,Aden>> runs this fully offline with a small ONNX model and fuses it with <<_bm25,BM25>> via <<_rrf,RRF>>. +
+[.ref]#References: https://arxiv.org/abs/2004.04906[Dense Passage Retrieval, Karpukhin et al. 2020 (arXiv)^]; the model Aden uses, https://huggingface.co/BAAI/bge-small-en-v1.5[BAAI/bge-small-en-v1.5^]#
+
+[[_drift]]Drift::
+The gap that opens when code changes but the prose, contracts, or notes describing it do not. <<_aden,Aden>>'s `heal` command detects drift by comparing the graph against its recorded contracts, so documentation rot becomes a checkable condition instead of a surprise.
+
+[[_embedding]]Embedding::
+A vector of numbers that represents the meaning of a piece of text, positioned so that similar meanings sit near each other. Embeddings are what make <<_dense_retrieval,dense retrieval>> possible. +
+[.ref]#Reference: https://arxiv.org/abs/1301.3781[word2vec, Mikolov et al. 2013 (arXiv)^]#
+
+[[_hybrid_retrieval]]Hybrid retrieval::
+Combining keyword search (<<_bm25,BM25>>) and meaning-based search (<<_dense_retrieval,dense retrieval>>) into one ranking with <<_rrf,Reciprocal Rank Fusion>>. You get exact matches and conceptual matches in a single result list.
+
+[[_impact_analysis]]Impact analysis::
+Determining what a proposed change will affect before you make it, the forward view of <<_blast_radius,blast radius>>. <<_aden,Aden>>'s `impact-diff` runs it against a Git diff, so a pull request can show its own reach.
+
+[[_knowledge_graph]]Knowledge graph::
+A directed graph where every function, module, and decision is a node, and every relationship (calls, imports, constraints) is a <<_typed_edge,typed edge>>. It makes the structure of a codebase explicit and queryable rather than implicit and scattered.
+
+[[_mcp]]MCP (Model Context Protocol)::
+An open protocol that lets AI clients call external tools through a uniform interface. <<_aden,Aden>> ships an MCP server, so an agent in an editor can query the graph the same way you would from the command line. +
+[.ref]#Reference: https://modelcontextprotocol.io[Model Context Protocol specification^]#
+
+[[_pillar_page]]Pillar page::
+A hub page for one broad topic that links down to the specific <<_cluster,cluster>> posts and that they link back up to. link:/series/aden/[The Aden series] index is a pillar page.
+
+[[_referential_context_compiler]]Referential context compiler::
+A tool that reads source material and emits not a rendering of it but a navigable map of how its parts reference each other. It is the category <<_aden,Aden>> defines for itself. The output is meant to be reasoned over, not just read.
+
+[[_rrf]]Reciprocal Rank Fusion (RRF)::
+A simple, robust way to merge two ranked lists: each item scores by the reciprocal of its rank in each list, and the sums decide the final order. It needs no tuning, which is why <<_aden,Aden>> uses it to fuse <<_bm25,BM25>> and <<_dense_retrieval,dense retrieval>>. +
+[.ref]#Reference: https://dl.acm.org/doi/10.1145/1571941.1572114[Cormack, Clarke & Buettcher, SIGIR 2009^]#
+
+[[_token_budget]]Token budget::
+The cap on how much text an AI model can take in at once. <<_aden,Aden>>'s `asm` command assembles context to fit a budget, keeping the most load-bearing relationships and dropping the rest. It is surgical selection instead of dumping a whole codebase into a prompt.
+
+[[_tree_sitter]]tree-sitter::
+A fast, incremental parser generator with grammars for hundreds of languages. <<_aden,Aden>> uses it to extract symbols and call relationships, which is what lets one tool work across 300+ languages. +
+[.ref]#Reference: https://tree-sitter.github.io/tree-sitter/[tree-sitter documentation^]#
+
+[[_typed_edge]]Typed edge::
+A relationship in the <<_knowledge_graph,knowledge graph>> that carries a label (calls, imports, constrains, documents) rather than being a bare connection. The type is what makes a query like "what _calls_ this?" answerable.
+
+'''
+
+[NOTE]
+====
+Missing a term? The glossary grows with the posts. Each new article promotes any term it leans on into this list, so the vocabulary stays defined in one place. External links open in a new tab.
+====

@@ -1,0 +1,17 @@
+# Hugo build output
+/public/
+/resources/_gen/
+.hugo_build.lock
+
+# Asciidoctor diagram cache (lands next to .adoc sources)
+.asciidoctor/
+
+# Pagefind (if used) output
+/public/pagefind/
+
+# OS / editor cruft
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/

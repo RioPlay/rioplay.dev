@@ -1,0 +1,168 @@
+baseURL = "https://rioplay.dev/"
+locale = "en-us"
+title = "RioPlay"
+theme = "PaperMod"
+
+# Show drafts/expired? off for production builds
+buildDrafts = false
+buildFuture = false
+buildExpired = false
+
+enableRobotsTXT = true
+enableEmoji = true
+pygmentsUseClasses = true
+
+# Pretty, predictable permalinks (matters for AsciiDoc cross-references)
+[permalinks]
+  posts = "/:section/:slug/"
+
+# ---------------------------------------------------------------------------
+# AsciiDoc pipeline. Hugo shells out to the `asciidoctor` binary per .adoc file.
+# ---------------------------------------------------------------------------
+[security]
+  [security.exec]
+    # Required since Hugo v0.91.0 — without this Hugo refuses to run asciidoctor.
+    allow = ['^asciidoctor$', '^dart-sass(-embedded)?$', '^go$', '^npx$', '^postcss$', '^babel$']
+    osEnv = ['(?i)^((HTTPS?|NO)_PROXY|PATH(EXT)?|APPDATA|TE?MP|TERM|GOPATH|HOME)$']
+
+[markup]
+  [markup.asciidocext]
+    backend              = "html5"
+    workingFolderCurrent = true     # REQUIRED for relative includes + diagram output
+    preserveTOC          = false
+    noHeaderOrFooter     = true     # Hugo supplies <head>/<body> via the theme
+    safeMode             = "unsafe" # needed for include:: directives
+    sectionNumbers       = false
+    failureLevel         = "fatal"
+    trace                = false
+    verbose              = false
+    [markup.asciidocext.attributes]
+      source-highlighter = "rouge"
+      rouge-style        = "github"
+      rouge-css          = "style"  # inline CSS, no external file
+      hide-uri-scheme    = true
+      sectlinks          = true
+      idprefix           = "_"
+      idseparator        = "_"
+      toc                = "macro"  # use toc::[] in the body where wanted
+  # Goldmark settings apply to any .md files (e.g. the search page).
+  [markup.goldmark.renderer]
+    unsafe = true
+  [markup.highlight]
+    noClasses = false
+    style     = "github"
+
+# ---------------------------------------------------------------------------
+# Taxonomies — `series` powers the pillar/cluster model (e.g. the Aden series).
+# ---------------------------------------------------------------------------
+[taxonomies]
+  tag      = "tags"
+  category = "categories"
+  series   = "series"
+
+# Home page emits JSON so PaperMod's built-in (Fuse.js) search has an index.
+[outputs]
+  home = ["HTML", "RSS", "JSON"]
+
+[pagination]
+  pagerSize = 10
+
+[minify]
+  disableXML = true
+
+# ---------------------------------------------------------------------------
+# PaperMod theme params
+# ---------------------------------------------------------------------------
+[params]
+  env = "production"             # enables sitemap, robots, opengraph, schema, twitter cards
+  description = "Notes on Aden, AI-native developer tooling, and building in public, by RioPlay."
+  keywords = ["Aden", "AI tooling", "developer tools", "knowledge graph", "Rust", "AsciiDoc"]
+  author = "RioPlay"
+  DateFormat = "January 2, 2006"
+  defaultTheme = "auto"          # respects OS dark/light preference
+  disableThemeToggle = false
+  ShowReadingTime = true
+  ShowShareButtons = false
+  ShowPostNavLinks = true
+  ShowBreadCrumbs = true
+  ShowCodeCopyButtons = true
+  ShowWordCount = true
+  ShowToc = true
+  TocOpen = false
+  ShowRssButtonInSectionTermList = true
+  comments = false
+  hideMeta = false
+  hideSummary = false
+
+  # Clean home landing: short intro + social links (PaperMod "home-info" mode).
+  [params.homeInfoParams]
+    Title = "RioPlay"
+    Content = "I build AI-native developer tooling. Right now that means **Aden**, a referential context compiler that turns any codebase into a queryable knowledge graph. This is where I write about how it works, why it's built the way it is, and what I learn shipping it in public. Start with the [Aden series](/series/aden/) or browse the [glossary](/glossary/)."
+
+  [[params.socialIcons]]
+    name = "github"
+    url = "https://github.com/rioplay"
+  [[params.socialIcons]]
+    name = "bluesky"
+    title = "Bluesky"
+    url = "https://bsky.app/profile/rioplay.bsky.social"
+  [[params.socialIcons]]
+    name = "x"
+    title = "X"
+    url = "https://x.com/RioPlay_"
+  [[params.socialIcons]]
+    name = "twitch"
+    title = "Twitch"
+    url = "https://www.twitch.tv/rioplay"
+  [[params.socialIcons]]
+    name = "youtube"
+    title = "YouTube"
+    url = "https://www.youtube.com/@Rio-Play"
+  [[params.socialIcons]]
+    name = "rss"
+    url = "/index.xml"
+  [[params.socialIcons]]
+    name = "email"
+    url = "mailto:rioplay@rioplay.dev"
+
+  [params.assets]
+    disableHLJS = true            # AsciiDoc uses Rouge; .md uses Chroma — no highlight.js
+    favicon = "/favicon.ico"
+
+  [params.label]
+    text = "RioPlay"
+
+# ---------------------------------------------------------------------------
+# Navigation
+# ---------------------------------------------------------------------------
+[menu]
+  [[menu.main]]
+    identifier = "posts"
+    name = "Posts"
+    url = "/posts/"
+    weight = 10
+  [[menu.main]]
+    identifier = "series"
+    name = "Series"
+    url = "/series/"
+    weight = 20
+  [[menu.main]]
+    identifier = "glossary"
+    name = "Glossary"
+    url = "/glossary/"
+    weight = 30
+  [[menu.main]]
+    identifier = "archives"
+    name = "Archive"
+    url = "/archives/"
+    weight = 40
+  [[menu.main]]
+    identifier = "about"
+    name = "About"
+    url = "/about/"
+    weight = 50
+  [[menu.main]]
+    identifier = "search"
+    name = "Search"
+    url = "/search/"
+    weight = 60

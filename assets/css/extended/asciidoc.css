@@ -1,0 +1,251 @@
+/* ===========================================================================
+   AsciiDoc support for PaperMod.
+   Asciidoctor emits semantic HTML (div.admonitionblock, div.listingblock,
+   div.quoteblock, dl, .colist ...) that no Hugo theme styles by default.
+   Everything here is scoped under .post-content so it never leaks into the
+   theme's own chrome. Colors use PaperMod's CSS variables for dark-mode parity.
+   =========================================================================== */
+
+/* --- Admonition blocks (NOTE / TIP / IMPORTANT / WARNING / CAUTION) -------
+   Rendered without font icons, so Asciidoctor emits a text caption
+   (<td class="icon"><div class="title">Note</div></td>). Styled as a clean
+   callout card: subtle tinted background, colored left rule, a small colored
+   uppercase label, and the content beside it. --accent is set per type. */
+.post-content .admonitionblock {
+    --accent: var(--border);        /* border rule: UI component, needs >= 3:1 */
+    --accent-text: var(--primary);  /* label text: needs >= 4.5:1 on --code-bg */
+    margin: 1.5em 0;
+}
+.post-content .admonitionblock > table {
+    width: 100%;
+    border: none;
+    border-left: 3px solid var(--accent);
+    border-collapse: collapse;
+    margin: 0;
+    background: var(--code-bg);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    overflow: hidden;
+}
+.post-content .admonitionblock > table td {
+    border: none;
+    padding: 0.7em 1.1em;
+    vertical-align: top;
+    background: none;
+}
+/* Left column becomes a compact colored label, not an icon. */
+.post-content .admonitionblock td.icon {
+    width: 1%;
+    white-space: nowrap;
+    padding-right: 0;
+}
+.post-content .admonitionblock td.icon .title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--accent-text);
+    line-height: 1.9;
+}
+/* Content column: optional bold block-title, then the body. */
+.post-content .admonitionblock td.content { width: 100%; }
+.post-content .admonitionblock td.content > .title {
+    font-weight: 700;
+    margin-bottom: 0.25em;
+}
+.post-content .admonitionblock td.content > :last-child { margin-bottom: 0; }
+
+/* Light mode: vivid border + a darker label color that clears 4.5:1 on the
+   tinted box. Dark mode swaps the label to a lighter tint (see below). */
+.post-content .admonitionblock.note      { --accent: #3b82f6; --accent-text: #1d4ed8; }
+.post-content .admonitionblock.tip       { --accent: #22c55e; --accent-text: #15803d; }
+.post-content .admonitionblock.important { --accent: #8b5cf6; --accent-text: #6d28d9; }
+.post-content .admonitionblock.warning   { --accent: #f59e0b; --accent-text: #b45309; }
+.post-content .admonitionblock.caution   { --accent: #ef4444; --accent-text: #b91c1c; }
+
+:root[data-theme="dark"] .post-content .admonitionblock.note      { --accent-text: #93c5fd; }
+:root[data-theme="dark"] .post-content .admonitionblock.tip       { --accent-text: #86efac; }
+:root[data-theme="dark"] .post-content .admonitionblock.important { --accent-text: #c4b5fd; }
+:root[data-theme="dark"] .post-content .admonitionblock.warning   { --accent-text: #fcd34d; }
+:root[data-theme="dark"] .post-content .admonitionblock.caution   { --accent-text: #fca5a5; }
+
+/* --- Source / listing blocks --------------------------------------------- */
+.post-content .listingblock { margin: 1.5em 0; }
+.post-content .listingblock .title,
+.post-content .imageblock .title,
+.post-content .tableblock + .title {
+    font-size: 0.85rem;
+    font-style: italic;
+    opacity: 0.75;
+    margin-bottom: 0.4em;
+}
+.post-content .listingblock pre {
+    overflow-x: auto;
+    border-radius: var(--radius);
+}
+.post-content pre.rouge,
+.post-content .listingblock pre.highlight {
+    padding: 0.8em 1em;
+}
+
+/* --- Callout lists (the numbered circles in code) ------------------------ */
+.post-content .colist > table { border: none; margin-top: 0.5em; }
+.post-content .colist > table td { border: none; padding: 0.2em 0.5em; }
+.post-content .colist > table td:first-child { width: 2em; }
+.post-content .conum[data-value] {
+    display: inline-block;
+    min-width: 1.4em;
+    text-align: center;
+    border-radius: 100px;
+    background: var(--primary);
+    color: var(--theme);
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-family: var(--font-mono, monospace);
+}
+.post-content .conum[data-value]::after { content: attr(data-value); }
+
+/* --- Quote blocks -------------------------------------------------------- */
+.post-content .quoteblock {
+    margin: 1.5em 0;
+    padding-left: 1.2em;
+    border-left: 4px solid var(--primary);
+}
+.post-content .quoteblock blockquote { border: none; margin: 0; padding: 0; }
+.post-content .quoteblock .attribution {
+    font-size: 0.9rem;
+    opacity: 0.75;
+    margin-top: 0.5em;
+}
+
+/* --- Lead paragraph & abstract ------------------------------------------- */
+.post-content .lead > p,
+.post-content #preamble .paragraph:first-child > p {
+    font-size: 1.15rem;
+    line-height: 1.6;
+    opacity: 0.9;
+}
+.post-content .abstract {
+    font-size: 1.05rem;
+    border-left: 3px solid var(--primary);
+    padding-left: 1em;
+    opacity: 0.9;
+}
+
+/* --- In-document table of contents (toc::[] macro) ----------------------- */
+.post-content #toc.toc {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1em 1.4em;
+    margin: 1.5em 0;
+}
+.post-content #toc .toctitle {
+    font-weight: 700;
+    margin: 0 0 0.4em;
+}
+.post-content #toc ul { list-style: none; padding-left: 1em; margin: 0.2em 0; }
+
+/* --- Confidence / inline role labels (research-site convention) ----------
+   Usage in AsciiDoc:  [green]*High*  [yellow]*Medium*  [red]*Low*
+   Bold text carries the meaning, so color is never the only signal (WCAG
+   1.4.1). Colors below clear 4.5:1 on each theme's page background. */
+.post-content .green  { color: #1b7a36; font-weight: 700; }
+.post-content .yellow { color: #b45309; font-weight: 700; }
+.post-content .red    { color: #c92a2a; font-weight: 700; }
+:root[data-theme="dark"] .post-content .green  { color: #69db7c; }
+:root[data-theme="dark"] .post-content .yellow { color: #fcd34d; }
+:root[data-theme="dark"] .post-content .red    { color: #ff8787; }
+
+/* ===========================================================================
+   Knowledge-base flavor — glossary, term anchors, and "see also" links.
+   This is what gives rioplay.dev the research-site feel: terms defined once,
+   deep-linked from everywhere, with a visible jump-link on hover.
+   =========================================================================== */
+
+/* Glossary definition list (dlist): term in bold, hanging description. */
+.post-content .glossary dl,
+.post-content dl.glossary {
+    display: block;
+}
+.post-content .glossary dt {
+    font-weight: 700;
+    font-size: 1.05rem;
+    margin-top: 1.4em;
+    scroll-margin-top: 5rem;   /* so anchor jumps clear the sticky-ish header */
+}
+.post-content .glossary dd {
+    margin: 0.3em 0 0;
+    padding-left: 1em;
+    border-left: 2px solid var(--border);
+}
+/* Show a ¶-style anchor on hover for any element with an id, like the KB. */
+.post-content [id]:hover > a.anchor::before,
+.post-content dt[id]:hover::after {
+    opacity: 0.5;
+}
+.post-content dt[id]::after {
+    content: "#";
+    margin-left: 0.4em;
+    opacity: 0;
+    color: var(--primary);
+    transition: opacity 0.15s ease;
+}
+
+/* "See also" / cross-reference footers inside a section. */
+.post-content .seealso {
+    font-size: 0.9rem;
+    opacity: 0.8;
+    margin-top: 0.5em;
+}
+
+/* Sources / references list at the foot of a post. */
+.post-content .sources ol { font-size: 0.92rem; }
+.post-content .sources li { margin: 0.3em 0; }
+
+/* Per-term canonical source link in the glossary (arXiv, project docs...).
+   Uses --secondary (a theme color tuned for >= 4.5:1) rather than opacity,
+   which would otherwise dim the text below the contrast minimum. */
+.post-content .glossary .ref {
+    display: block;
+    margin-top: 0.4em;
+    font-size: 0.8rem;
+    color: var(--secondary);
+}
+.post-content .glossary .ref::before {
+    content: "\2197\00a0";   /* ↗ + nbsp */
+}
+
+/* ===========================================================================
+   Accessibility (WCAG 2.2). Focus appearance, skip link, anchor clearance.
+   =========================================================================== */
+
+/* Visible keyboard focus everywhere: --primary is high-contrast in both
+   themes, so the ring clears 3:1 against any background (SC 2.4.11/2.4.13). */
+:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+/* Don't show the ring for mouse clicks, only keyboard. */
+:focus:not(:focus-visible) { outline: none; }
+
+/* Skip link: first focusable element, hidden until focused (SC 2.4.1). */
+.skip-link {
+    position: absolute;
+    left: 0.5rem;
+    top: -3rem;
+    z-index: 1000;
+    padding: 0.5rem 0.9rem;
+    border-radius: var(--radius);
+    background: var(--primary);
+    color: var(--theme);            /* primary-on-theme is the theme's max contrast */
+    text-decoration: none;
+    transition: top 0.15s ease;
+}
+.skip-link:focus { top: 0.5rem; }
+
+/* The skip target should not grab a visible outline when focused programmatically. */
+#main:focus { outline: none; }
+
+/* Give anchor jumps and focused targets a little breathing room from the top. */
+html { scroll-padding-top: 1.5rem; }

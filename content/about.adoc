@@ -1,0 +1,43 @@
+---
+title: "About"
+summary: "Who RioPlay is and what this site is for."
+url: "/about/"
+ShowToc: false
+ShowReadingTime: false
+ShowBreadCrumbs: false
+---
+[.lead]
+I'm RioPlay. I like taking things apart to see what else they can do, and this is where I write about it.
+
+== Where this started
+
+My first real personal computer was a Chromebook. It was supposed to be a browser with a keyboard attached, a locked-down thing that did a short list of approved tasks and nothing else. I spent a lot of my time growing up ignoring that list. Most of what I know now started as me trying to make that little machine do something it was never meant to, then figuring out why it broke when I did.
+
+That habit never went away. It just moved on to bigger machines and harder problems.
+
+== What this site is
+
+This is a personal blog, not a single-topic one. I expect it to wander across whatever I am building, breaking, learning, or curious about: developer tooling, the projects I make, the occasional rabbit hole. The through-line is not a subject, it is the way I like to approach things.
+
+The reason it exists at all is link:/series/aden/[*Aden*], a tool I have been building that turns a codebase into a queryable map for humans and AI agents. Aden is the first project I cared enough about to want to write it down and share it as I go, and once I started, a blog felt like the right home for the rest of my interests too.
+
+A couple of corners worth knowing about:
+
+* The link:/glossary/[Glossary] defines recurring terms once and links out to their sources, so posts can stay readable without re-explaining the basics.
+* The link:/archives/[Archive] is the full index of everything published.
+
+The site is built with Hugo and written in AsciiDoc, the same plain-text format Aden reads. I liked the idea of writing about the tool on the same substrate the tool is built on.
+
+== Elsewhere
+
+* GitHub: https://github.com/rioplay[github.com/rioplay^]
+* Bluesky: https://bsky.app/profile/rioplay.bsky.social[@rioplay.bsky.social^]
+* X: https://x.com/RioPlay_[@RioPlay_^]
+* Twitch: https://www.twitch.tv/rioplay[twitch.tv/rioplay^]
+* YouTube: https://www.youtube.com/@Rio-Play[@Rio-Play^]
+* Email: mailto:rioplay@rioplay.dev[rioplay@rioplay.dev]
+
+[TIP]
+====
+New here? Start with link:/posts/introducing-aden/[Introducing Aden]. It is the project that kicked all of this off, and it explains what I have been building, in about ten minutes.
+====
