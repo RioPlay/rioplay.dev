@@ -1,0 +1,10 @@
+{
+  // Static-site deployment for rioplay.dev via Cloudflare Workers Assets.
+  // The build command produces ./public; wrangler uploads it as static assets.
+  "name": "rioplay-dev",
+  "compatibility_date": "2026-06-07",
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "404-page"
+  }
+}
