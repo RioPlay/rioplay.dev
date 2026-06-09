@@ -31,12 +31,12 @@ That background shapes how I build. I come at software the way a sysadmin comes 
 
 This is a personal blog, not a single-topic one. I expect it to wander across whatever I am building, breaking, learning, or curious about: developer tooling, the projects I make, the occasional rabbit hole. The through-line is not a subject, it is the way I like to approach things.
 
-The reason it exists at all is link:/series/aden/[*Aden*], a tool I have been building that turns a codebase into a queryable map for humans and AI agents. Aden is the first project I cared enough about to want to write it down and share it as I go, and once I started, a blog felt like the right home for the rest of my interests too.
+The reason it exists at all is xref:./series/aden/_index.md[*Aden*], a tool I have been building that turns a codebase into a queryable map for humans and AI agents. Aden is the first project I cared enough about to want to write it down and share it as I go, and once I started, a blog felt like the right home for the rest of my interests too.
 
 A couple of corners worth knowing about:
 
-* The link:/glossary/[Glossary] defines recurring terms once and links out to their sources, so posts can stay readable without re-explaining the basics.
-* The link:/archives/[Archive] is the full index of everything published.
+* The xref:./glossary.adoc[Glossary] defines recurring terms once and links out to their sources, so posts can stay readable without re-explaining the basics.
+* The xref:./archives.md[Archive] is the full index of everything published.
 
 The site is built with Hugo and written in AsciiDoc, the same plain-text format Aden reads. I liked the idea of writing about the tool on the same substrate the tool is built on.
 
@@ -59,5 +59,5 @@ I treat AI as exactly that, a tool, only as useful as the person wielding it. It
 
 [TIP]
 ====
-New here? Start with link:/posts/introducing-aden/[Introducing Aden]. It is the project that kicked all of this off, and it explains what I have been building, in about ten minutes.
+New here? Start with xref:./posts/introducing-aden/index.adoc[Introducing Aden]. It is the project that kicked all of this off, and it explains what I have been building, in about ten minutes.
 ====

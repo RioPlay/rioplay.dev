@@ -15,7 +15,7 @@ ShowToc: true
 TocOpen: false
 ---
 [.lead]
-I set out to make Aden's link:/glossary/#_knowledge_graph[knowledge graph] *beautiful*. By the end of the week it had found five real bugs — in Aden. This is the story of building a graph viewer, pointing the tool at itself, and discovering that a tool's sharpest value can be the moment it becomes its own diagnostic.
+I set out to make Aden's xref:../../glossary.adoc#_knowledge_graph[knowledge graph] *beautiful*. By the end of the week it had found five real bugs — in Aden. This is the story of building a graph viewer, pointing the tool at itself, and discovering that a tool's sharpest value can be the moment it becomes its own diagnostic.
 
 [NOTE]
 .Where this picks up
@@ -82,11 +82,11 @@ flowchart TB
   end
 ----
 
-The fix became a real refactor: split containment into a new `Contains` edge type, freeing `Documents` to mean *only* "prose documents code." But "just delete the redundant edges" was a trap. I ran a small fleet of parallel agents to audit every consumer first, and they found that Aden's link:/glossary/#_context_assembly[context assembler] walks edges *outgoing-only* — so those forward edges were load-bearing for top-down traversal. The honest fix was not deletion; it was a clean new type with *zero* behaviour change. The graph found the smell; the audit found the constraint; the fix respected both.
+The fix became a real refactor: split containment into a new `Contains` edge type, freeing `Documents` to mean *only* "prose documents code." But "just delete the redundant edges" was a trap. I ran a small fleet of parallel agents to audit every consumer first, and they found that Aden's xref:../../glossary.adoc#_context_assembly[context assembler] walks edges *outgoing-only* — so those forward edges were load-bearing for top-down traversal. The honest fix was not deletion; it was a clean new type with *zero* behaviour change. The graph found the smell; the audit found the constraint; the fix respected both.
 
 == Act III — the benchmark that caught a bug
 
-Confident, and a little smug, I built a benchmark harness to prove Aden's link:/glossary/#_hybrid_retrieval[hybrid retrieval] beats plain BM25 on real repositories, across languages. It does — on every one:
+Confident, and a little smug, I built a benchmark harness to prove Aden's xref:../../glossary.adoc#_hybrid_retrieval[hybrid retrieval] beats plain BM25 on real repositories, across languages. It does — on every one:
 
 [cols="1,1,>1,>1,>1",options="header"]
 |===

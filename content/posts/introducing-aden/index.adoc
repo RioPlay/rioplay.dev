@@ -20,7 +20,7 @@ Drop a capable AI model into a codebase of a hundred thousand lines and it hits 
 [NOTE]
 .The short version
 ====
-Aden compiles a codebase or documentation set into a queryable link:/glossary/#_knowledge_graph[knowledge graph]. Every symbol becomes a node, and every call, import, and constraint becomes a typed edge. You then ask for exactly the context a task needs, within a link:/glossary/#_token_budget[token budget], fully offline, across 300-plus languages. I started it on 23 May 2026 and I write about it here as I go.
+Aden compiles a codebase or documentation set into a queryable xref:../../glossary.adoc#_knowledge_graph[knowledge graph]. Every symbol becomes a node, and every call, import, and constraint becomes a typed edge. You then ask for exactly the context a task needs, within a xref:../../glossary.adoc#_token_budget[token budget], fully offline, across 300-plus languages. I started it on 23 May 2026 and I write about it here as I go.
 ====
 
 == A model reading through a keyhole
@@ -55,11 +55,11 @@ Before building anything I wrote down why the tools already on my disk could not
 | Code that looks similar, which is not the same as code that is connected. The function that calls `auth_middleware` is usually written nothing like `auth_middleware`, so similarity search walks right past the call chain.
 |===
 
-The questions a coding agent needs answered are "what calls this," "what depends on this type," and "what is the link:/glossary/#_blast_radius[blast radius] if I rename it." Those are graph traversals. No embedding model, however good, answers them from similarity alone, because they are not similarity questions.
+The questions a coding agent needs answered are "what calls this," "what depends on this type," and "what is the xref:../../glossary.adoc#_blast_radius[blast radius] if I rename it." Those are graph traversals. No embedding model, however good, answers them from similarity alone, because they are not similarity questions.
 
 == Aden's answer is a typed graph
 
-So Aden builds the graph those tools never produce. It parses source with link:/glossary/#_tree_sitter[tree-sitter], resolves symbols and references, and stores the result as a directed graph. Every function, module, and decision is a node. Every relationship is a link:/glossary/#_typed_edge[typed edge] carrying a label: `calls`, `uses`, `constrains`, `documents`. The label is the whole point. It is what makes "what _calls_ this?" a precise query instead of a fuzzy one.
+So Aden builds the graph those tools never produce. It parses source with xref:../../glossary.adoc#_tree_sitter[tree-sitter], resolves symbols and references, and stores the result as a directed graph. Every function, module, and decision is a node. Every relationship is a xref:../../glossary.adoc#_typed_edge[typed edge] carrying a label: `calls`, `uses`, `constrains`, `documents`. The label is the whole point. It is what makes "what _calls_ this?" a precise query instead of a fuzzy one.
 
 [.mermaid]
 ----
@@ -92,9 +92,9 @@ The graph stays fresh by construction. The read commands (`ask`, `asm`, `query`,
 
 The first commit landed on 23 May 2026. A couple of hundred commits later, the part I most wanted to get right was ranking, and it was the part most obviously broken.
 
-Default retrieval is link:/glossary/#_bm25[BM25], the classic lexical ranker. It is exact and explainable, and it has a failure mode I kept hitting in my own evaluation set, logged as defect M14. A rare verb in the query, say "detect," picks up a high inverse-document-frequency weight and outranks the subject nouns that actually identify the target. So `ask "detect drift between code and docs"` would route to a thin, wrong symbol because one uncommon word dominated the score.
+Default retrieval is xref:../../glossary.adoc#_bm25[BM25], the classic lexical ranker. It is exact and explainable, and it has a failure mode I kept hitting in my own evaluation set, logged as defect M14. A rare verb in the query, say "detect," picks up a high inverse-document-frequency weight and outranks the subject nouns that actually identify the target. So `ask "detect drift between code and docs"` would route to a thin, wrong symbol because one uncommon word dominated the score.
 
-The fix is the standard one from the information-retrieval literature. Run a link:/glossary/#_dense_retrieval[dense semantic search] alongside BM25 and fuse the two ranked lists with link:/glossary/#_rrf[Reciprocal Rank Fusion] (Cormack, Clarke and Buettcher, SIGIR 2009), with the paper's constant of 60. RRF needs no training and no score normalization, which is exactly why it is a good fit for a tool that has to stay deterministic. The embeddings run locally through a pure-Rust ONNX runtime (`tract`) with the BAAI/bge-small-en-v1.5 model, 384 dimensions, about 127 MB, MIT-licensed. It sits behind an opt-in build flag and the whole path stays offline.
+The fix is the standard one from the information-retrieval literature. Run a xref:../../glossary.adoc#_dense_retrieval[dense semantic search] alongside BM25 and fuse the two ranked lists with xref:../../glossary.adoc#_rrf[Reciprocal Rank Fusion] (Cormack, Clarke and Buettcher, SIGIR 2009), with the paper's constant of 60. RRF needs no training and no score normalization, which is exactly why it is a good fit for a tool that has to stay deterministic. The embeddings run locally through a pure-Rust ONNX runtime (`tract`) with the BAAI/bge-small-en-v1.5 model, 384 dimensions, about 127 MB, MIT-licensed. It sits behind an opt-in build flag and the whole path stays offline.
 
 The first version of this was unusable. It re-embedded the entire corpus on every reindex, so noticing a single edited file on the Linux subset took about 71 seconds. The next change was a content-addressed embedding cache keyed by each symbol's source hash, so a reindex only re-embeds what actually changed. That same one-file edit now settles in roughly 2.5 seconds.
 
@@ -123,7 +123,7 @@ That is a 35% relative lift at rank 1 and 43% at rank 5, and outright misses dro
 I ran these myself, with single-target ground truth: exactly one "correct" file per query. A result that surfaces an equally valid sibling file still counts as a miss, so real usefulness sits above the raw recall. This is file-level routing, not end-to-end task success, and it is one corpus with labels I wrote. Indicative, not a standardized benchmark. The honest cost line: the first embedding pass over that Linux subset took about 24 minutes on CPU, once, before the incremental cache made every later reindex cheap.
 ====
 
-Two more capabilities landed in the same stretch and reuse machinery that was already there. `aden impact-diff` maps a git diff to the symbols it touches and runs the impact traversal from each, so a change can report its own link:/glossary/#_blast_radius[blast radius] before you commit it. `aden communities` groups densely connected symbols with link:/glossary/#_community_detection[deterministic Louvain modularity], which gives `ask` a sensible fallback when it would otherwise dump the project root.
+Two more capabilities landed in the same stretch and reuse machinery that was already there. `aden impact-diff` maps a git diff to the symbols it touches and runs the impact traversal from each, so a change can report its own xref:../../glossary.adoc#_blast_radius[blast radius] before you commit it. `aden communities` groups densely connected symbols with xref:../../glossary.adoc#_community_detection[deterministic Louvain modularity], which gives `ask` a sensible fallback when it would otherwise dump the project root.
 
 == The one rule I set for myself
 
@@ -139,7 +139,7 @@ That is the honest case for AI as a tool. It did not replace an engineer. It let
 
 == Why AsciiDoc, and why this site is written in it
 
-link:/glossary/#_asciidoc[AsciiDoc] has a regular grammar and native `+<<anchor>>+` cross-references that map straight onto graph edges. A document written in it is already a referential structure, so Aden can compile prose into the same graph as code and answer "is this documented" or "did the docs drift from the signature" as graph queries. That is why Aden reads and writes AsciiDoc, and it is why this whole site is authored in it. The place I write about the tool runs on the same substrate the tool is built on.
+xref:../../glossary.adoc#_asciidoc[AsciiDoc] has a regular grammar and native `+<<anchor>>+` cross-references that map straight onto graph edges. A document written in it is already a referential structure, so Aden can compile prose into the same graph as code and answer "is this documented" or "did the docs drift from the signature" as graph queries. That is why Aden reads and writes AsciiDoc, and it is why this whole site is authored in it. The place I write about the tool runs on the same substrate the tool is built on.
 
 == Try it
 
@@ -185,7 +185,7 @@ Then expose the graph to your agent via MCP:
 aden mcp install --platform claude
 ----
 
-That last command matters most for agents. Aden ships an link:/glossary/#_mcp[MCP] server, so an assistant in your editor queries the same graph you do from the terminal.
+That last command matters most for agents. Aden ships an xref:../../glossary.adoc#_mcp[MCP] server, so an assistant in your editor queries the same graph you do from the terminal.
 
 == What it is not good at yet
 
@@ -202,4 +202,4 @@ Aden is open source under AGPL-3.0. The code, the docs, and the eval harness beh
 . Retrieval evaluation: `crates/aden-index/tests/eval_corpus.rs` and `scripts/eval_corpus.py`, run over a Linux-kernel subset and `create-t3-app`.
 . G. Cormack, C. Clarke, S. Buettcher, https://dl.acm.org/doi/10.1145/1571941.1572114["Reciprocal Rank Fusion outperforms Condorcet and individual rank learning methods," SIGIR 2009^].
 . Components referenced above: https://tree-sitter.github.io/tree-sitter/[tree-sitter^] (parsing), https://huggingface.co/BAAI/bge-small-en-v1.5[BAAI/bge-small-en-v1.5^] embeddings on the https://github.com/sonos/tract[tract^] runtime, and the https://modelcontextprotocol.io[Model Context Protocol^].
-. The link:/glossary/[site glossary] defines and sources every term used above. This site is built with https://asciidoctor.org[Asciidoctor^].
+. The xref:../../glossary.adoc[site glossary] defines and sources every term used above. This site is built with https://asciidoctor.org[Asciidoctor^].
