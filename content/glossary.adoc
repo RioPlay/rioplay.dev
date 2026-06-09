@@ -34,6 +34,9 @@ The specific posts that answer narrow questions under a broad topic, all linking
 Finding groups of nodes that are more connected to each other than to the rest of a graph. <<_aden,Aden>> uses the deterministic Louvain algorithm to surface natural module boundaries in a codebase, even when the directory layout hides them, and colours them in its graph viewer (link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself]). +
 [.ref]#References: https://arxiv.org/abs/0803.0476[Louvain, Blondel et al. 2008 (arXiv)^] and https://arxiv.org/abs/1810.08473[Leiden, Traag et al. 2019 (arXiv)^]#
 
+[[_contains]]Contains (edge)::
+A <<_typed_edge,typed edge>> for structural containment — a module _contains_ its symbols, a project _contains_ its modules. It is deliberately distinct from <<_aden,Aden>>'s `Documents` edge, which means *prose documents code*. Collapsing the two into one had buried the genuine documentation links under containment mirrors; splitting them out is a refactor told in link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
+
 [[_context_assembly]]Context assembly::
 Selecting and ordering the connected slice of a <<_knowledge_graph,knowledge graph>> a task needs, within a <<_token_budget,token budget>> — surgical selection instead of dumping whole files into a prompt. <<_aden,Aden>>'s `asm` command walks <<_typed_edge,typed edges>> outward from a starting symbol, keeping the most load-bearing relationships until the budget is spent. Because that walk is outgoing-only, the *direction* of an edge is load-bearing — see link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
 
@@ -53,6 +56,9 @@ The gap that opens when code changes but the prose, contracts, or notes describi
 [[_embedding]]Embedding::
 A vector of numbers that represents the meaning of a piece of text, positioned so that similar meanings sit near each other. Embeddings are what make <<_dense_retrieval,dense retrieval>> possible. +
 [.ref]#Reference: https://arxiv.org/abs/1301.3781[word2vec, Mikolov et al. 2013 (arXiv)^]#
+
+[[_graph_viewer]]Graph viewer (viz / view)::
+How <<_aden,Aden>> renders the <<_knowledge_graph,knowledge graph>> for humans. `aden viz` exports a slice as a text diagram — Mermaid, Graphviz DOT, or JSON — to drop into a pull request or doc. `aden view` opens a self-contained, *fully offline* interactive graph in the browser: <<_community_detection,community>> drill-down, git-history replay, search, edge-type filters, and click-through to the source line. Pointing it at Aden's own graph is what turned visualisation into diagnosis. See link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
 
 [[_hybrid_retrieval]]Hybrid retrieval::
 Combining keyword search (<<_bm25,BM25>>) and meaning-based search (<<_dense_retrieval,dense retrieval>>) into one ranking with <<_rrf,Reciprocal Rank Fusion>>. You get exact matches and conceptual matches in a single result list. It meets or beats BM25 on every corpus tested — Go, Rust, C#, Python, and TypeScript — measured in link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
