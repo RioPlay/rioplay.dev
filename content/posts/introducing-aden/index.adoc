@@ -171,11 +171,17 @@ Get the blast radius of your current git diff, before you commit:
 aden impact-diff
 ----
 
-Build with hybrid retrieval, then expose the tools to your agent:
+Enable hybrid retrieval by building with the `dense` feature:
 
 [source,bash]
 ----
 cargo build -p aden-cli --features dense
+----
+
+Then expose the graph to your agent via MCP:
+
+[source,bash]
+----
 aden mcp install --platform claude
 ----
 
