@@ -17,6 +17,9 @@ A plain-text writing format with a regular grammar, cross-references (`+<<anchor
 [[_aden]]Aden::
 A <<_referential_context_compiler,referential context compiler>>: it compiles code and documentation into a <<_knowledge_graph,knowledge graph>> that humans and AI agents can query for exactly the context a task needs. See link:/series/aden/[the Aden series].
 
+[[_anchor]]Anchor::
+A stable identifier for a node in <<_aden,Aden>>'s <<_knowledge_graph,knowledge graph>>, written as a URI such as `aden://module/<crate>/<file>#<symbol>`. Every symbol, documentation heading, and edge endpoint is named by its anchor, so context and cross-references stay valid across files and runs. (When two files share a basename the naive anchor can collide — a subtlety explored in link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].)
+
 [[_blast_radius]]Blast radius::
 Everything a change can affect downstream. If you alter a function, its blast radius is every symbol that transitively depends on it. <<_aden,Aden>> answers this by walking <<_typed_edge,typed edges>> rather than guessing. Also called <<_impact_analysis,impact analysis>>.
 
@@ -28,12 +31,21 @@ A classic keyword-ranking function that scores documents by term overlap with a 
 The specific posts that answer narrow questions under a broad topic, all linking up to a <<_pillar_page,pillar page>>. Pillar plus cluster is how this site organizes a subject so both readers and search engines see the topical structure.
 
 [[_community_detection]]Community detection::
-Finding groups of nodes that are more connected to each other than to the rest of a graph. <<_aden,Aden>> uses the deterministic Louvain algorithm to surface natural module boundaries in a codebase, even when the directory layout hides them. +
+Finding groups of nodes that are more connected to each other than to the rest of a graph. <<_aden,Aden>> uses the deterministic Louvain algorithm to surface natural module boundaries in a codebase, even when the directory layout hides them, and colours them in its graph viewer (link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself]). +
 [.ref]#References: https://arxiv.org/abs/0803.0476[Louvain, Blondel et al. 2008 (arXiv)^] and https://arxiv.org/abs/1810.08473[Leiden, Traag et al. 2019 (arXiv)^]#
+
+[[_context_assembly]]Context assembly::
+Selecting and ordering the connected slice of a <<_knowledge_graph,knowledge graph>> a task needs, within a <<_token_budget,token budget>> — surgical selection instead of dumping whole files into a prompt. <<_aden,Aden>>'s `asm` command walks <<_typed_edge,typed edges>> outward from a starting symbol, keeping the most load-bearing relationships until the budget is spent. Because that walk is outgoing-only, the *direction* of an edge is load-bearing — see link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
 
 [[_dense_retrieval]]Dense retrieval::
 Search by meaning rather than shared words, using <<_embedding,embeddings>>. It finds code that is conceptually related even with no vocabulary in common. <<_aden,Aden>> runs this fully offline with a small ONNX model and fuses it with <<_bm25,BM25>> via <<_rrf,RRF>>. +
 [.ref]#References: https://arxiv.org/abs/2004.04906[Dense Passage Retrieval, Karpukhin et al. 2020 (arXiv)^]; the model Aden uses, https://huggingface.co/BAAI/bge-small-en-v1.5[BAAI/bge-small-en-v1.5^]#
+
+[[_determinism]]Determinism (reproducible build)::
+The property that identical input always produces a byte-identical index and the same retrieval results, run to run. Without it a benchmark cannot be trusted and two people get different answers for the same code. <<_aden,Aden>> makes indexing deterministic by canonicalising order everywhere it would otherwise depend on hash iteration, thread timing, or a wall-clock value. The hunt for five separate sources of non-determinism is told in link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
+
+[[_dogfooding]]Dogfooding::
+Using your own tool on itself. Running <<_aden,Aden>> against Aden's own codebase turned the graph viewer into a diagnostic that surfaced real bugs in Aden — redundant edges and a pollution hub — that code review had missed. The strongest argument that a tool works is that it improves itself. See link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
 
 [[_drift]]Drift::
 The gap that opens when code changes but the prose, contracts, or notes describing it do not. <<_aden,Aden>>'s `heal` command detects drift by comparing the graph against its recorded contracts, so documentation rot becomes a checkable condition instead of a surprise.
@@ -43,7 +55,7 @@ A vector of numbers that represents the meaning of a piece of text, positioned s
 [.ref]#Reference: https://arxiv.org/abs/1301.3781[word2vec, Mikolov et al. 2013 (arXiv)^]#
 
 [[_hybrid_retrieval]]Hybrid retrieval::
-Combining keyword search (<<_bm25,BM25>>) and meaning-based search (<<_dense_retrieval,dense retrieval>>) into one ranking with <<_rrf,Reciprocal Rank Fusion>>. You get exact matches and conceptual matches in a single result list.
+Combining keyword search (<<_bm25,BM25>>) and meaning-based search (<<_dense_retrieval,dense retrieval>>) into one ranking with <<_rrf,Reciprocal Rank Fusion>>. You get exact matches and conceptual matches in a single result list. It meets or beats BM25 on every corpus tested — Go, Rust, C#, Python, and TypeScript — measured in link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
 
 [[_impact_analysis]]Impact analysis::
 Determining what a proposed change will affect before you make it, the forward view of <<_blast_radius,blast radius>>. <<_aden,Aden>>'s `impact-diff` runs it against a Git diff, so a pull request can show its own reach.
