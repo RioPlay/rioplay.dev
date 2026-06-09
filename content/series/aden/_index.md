@@ -11,9 +11,10 @@ cover:
 ### Start here
 
 1. [**Introducing Aden**](/posts/introducing-aden/) covers the context problem, what Aden does, how the pipeline works, and how it has evolved.
+2. [**The Graph That Audited Itself**](/posts/the-graph-that-audited-itself/) builds the interactive graph viewer, points Aden at its own codebase to find real bugs, and chases a five-cause non-determinism hunt to a reproducible 0.2.0 release.
 
 ### Coming up
 
-Future posts in this series will go deeper on individual pieces: the retrieval stack, drift detection, the graph algorithms, and benchmarks against real corpora. Each will link back to the [glossary](/glossary/) for shared terms.
+Future posts in this series will go deeper on individual pieces: teaching Aden to verify itself (a determinism gate, `graph diff`, `doctor`), drift detection, the graph algorithms, and broader benchmarks. Each will link back to the [glossary](/glossary/) for shared terms.
 
 > This is a [pillar page](/glossary/#_pillar_page): a hub for one topic that links down to the specific posts (the cluster) and that they link back up to. It is the same structure the rest of the site uses.

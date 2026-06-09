@@ -1,0 +1,152 @@
+---
+title: "The Graph That Audited Itself"
+slug: "the-graph-that-audited-itself"
+date: 2026-06-09
+lastmod: 2026-06-09
+draft: false
+summary: "I set out to make Aden's knowledge graph beautiful. By the end of the week it had found five real bugs — in Aden. The story of building a graph viewer, pointing the tool at itself, and the determinism hunt that followed."
+description: "Part two of the Aden series: building an offline interactive graph viewer, using it to audit Aden's own graph (redundant edges, a pollution hub), splitting containment off the Documents edge, and chasing a five-cause non-determinism bug to a reproducible 0.2.0 release."
+series: ["Aden"]
+categories: ["Aden"]
+tags: ["aden", "ai-tooling", "developer-tools", "knowledge-graph", "determinism", "dogfooding", "rust", "asciidoc"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+I set out to make Aden's link:/glossary/#_knowledge_graph[knowledge graph] *beautiful*. By the end of the week it had found five real bugs — in Aden. This is the story of building a graph viewer, pointing the tool at itself, and discovering that a tool's sharpest value can be the moment it becomes its own diagnostic.
+
+[NOTE]
+.Where this picks up
+====
+link:/posts/introducing-aden/[Part one] covered what Aden is: it compiles a codebase into a queryable knowledge graph and serves dense, connected context to coding agents, fully offline. That post ended on the retrieval rewrite. This one is about *seeing* the graph — and what seeing it revealed. It ships as Aden **0.2.0**.
+====
+
+== Act I — making the graph visible
+
+It started as a side quest: a `aden viz` command to export a slice of the graph as a Mermaid or Graphviz diagram you could paste into a pull request. Text-first, useful, boring in the good way.
+
+Then it grew teeth. `aden view` became a *self-contained, offline* browser graph — the entire thing inlined into one HTML file. No CDN, no server, no build step. Force-directed, coloured by subsystem, with search, edge-type filters, expand-a-community-into-its-functions-in-place, and click-a-node-to-open-the-source-at-its-line. And the part I couldn't stop watching: *git-history replay*. Point it at a repo and watch the project populate over time, commit by commit, nodes blooming as the code that defined them is written.
+
+Here is an honest slice of Aden's own graph — the neighborhood of the `cmd_view` function that renders that very viewer:
+
+[.mermaid]
+----
+flowchart LR
+  n0["main.rs#real_main"]
+  n2["view.rs#cmd_view"]
+  n3["view.rs#editor_template"]
+  n4["view.rs#git_activity"]
+  n5["view.rs#open_in_browser"]
+  n6["viz.rs#anchors_json"]
+  n7["viz.rs#viz_json_for"]
+  n8["lib.rs#Error"]
+  n10["mod-aden-cli"]
+  n0 -->|Calls| n2
+  n2 -->|Calls| n3
+  n2 -->|Calls| n4
+  n2 -->|Calls| n5
+  n2 -->|Calls| n6
+  n2 -->|Calls| n7
+  n2 -->|Uses| n8
+  n2 -->|PartOf| n10
+  n10 -->|Contains| n2
+----
+
+Every node is a real symbol; every arrow is a typed edge Aden extracted. That little `Contains` / `PartOf` pair between `mod-aden-cli` and `cmd_view` is going to matter in a minute.
+
+Building something *offline and inlined* forces a discipline I have come to trust: the artifact is the whole truth. One file, no moving parts. If it is wrong, it is wrong *in the file*, and you can diff it.
+
+== Act II — the turn: point it at itself
+
+Here is where it stopped being a visualization and became a *diagnostic*.
+
+To feed the viewer I built a "whole-graph view model" export: every node with its attributes, every typed edge. Then I did the obvious, slightly vain thing — I ran it on Aden's own source and stared at Aden's own graph. Two things were *wrong*, and the graph said so far louder than the code ever had.
+
+**A 730-degree star labelled `mod-unknown`.** Aden was indexing its own *vendored, minified* `force-graph.min.js` — turning a bundle of single-letter functions (`#A`, `#Dr`, `#Fe`…) into ninety-odd meaningless symbols, all bucketed under "unknown," dominating the layout. A one-line ignore rule (`*.min.js`) deleted the entire mega-hub. You do not *read* your way to that bug. You *see* it.
+
+**The `Documents` edge was a lie.** I noticed the `Documents` and `PartOf` edge counts were suspiciously identical — both exactly 706. A check confirmed it: *every single `Documents` edge was the exact inverse of a `PartOf` edge.* Aden emitted "module contains symbol" as **both** `PartOf` (correct) and `Documents` (containment wearing a documentation costume). 706 redundant mirror edges — about 19% of the graph — and worse, they buried the ~374 *genuine* prose-to-code links roughly two to one.
+
+[.mermaid]
+----
+flowchart TB
+  subgraph before["Before: Documents duplicates PartOf"]
+    m1["mod-aden-cli"] -->|Documents| s1["cmd_view"]
+    s1 -->|PartOf| m1
+  end
+  subgraph after["After: Contains is containment, Documents is prose-to-code"]
+    m2["mod-aden-cli"] -->|Contains| s2["cmd_view"]
+    s2 -->|PartOf| m2
+    d2["architecture.adoc"] -->|Documents| s2
+  end
+----
+
+The fix became a real refactor: split containment into a new `Contains` edge type, freeing `Documents` to mean *only* "prose documents code." But "just delete the redundant edges" was a trap. I ran a small fleet of parallel agents to audit every consumer first, and they found that Aden's link:/glossary/#_context_assembly[context assembler] walks edges *outgoing-only* — so those forward edges were load-bearing for top-down traversal. The honest fix was not deletion; it was a clean new type with *zero* behaviour change. The graph found the smell; the audit found the constraint; the fix respected both.
+
+== Act III — the benchmark that caught a bug
+
+Confident, and a little smug, I built a benchmark harness to prove Aden's link:/glossary/#_hybrid_retrieval[hybrid retrieval] beats plain BM25 on real repositories, across languages. It does — on every one:
+
+[cols="1,1,>1,>1,>1",options="header"]
+|===
+| Repo | Language | BM25 R@1 | Hybrid R@1 | Hybrid R@20
+
+| getkin/kin-openapi | Go | 0.273 | *0.409* | 0.591
+| rust-lang/rustfmt | Rust | 0.095 | *0.095* | 0.238
+| unoplatform/uno | C# | 0.150 | *0.150* | 0.300
+| pallets/flask | Python | 0.176 | *0.176* | 0.294
+| TanStack/query | TypeScript | 0.091 | *0.182* | 0.364
+|===
+
+The lift is easiest to see at Recall@20 — the bars are BM25, the line is Hybrid riding above them on every language:
+
+[.mermaid]
+----
+xychart-beta
+    title "Recall@20 by language — BM25 (bars) vs Hybrid (line)"
+    x-axis [Go, Rust, "C#", Python, TS]
+    y-axis "Recall@20" 0 --> 0.7
+    bar [0.455, 0.191, 0.150, 0.235, 0.182]
+    line [0.591, 0.238, 0.300, 0.294, 0.364]
+----
+
+Hybrid is greater than or equal to BM25 everywhere, strongest where exact-term matching is weakest. Good. Except — the first time I ran the harness *twice*, I got *different numbers*. Same binary, same queries, same repo.
+
+You could rationalise that away ("eval noise, who cares"). I did not, because a benchmark whose entire value is reproducibility that *is not reproducible* is worthless. So I chased it. And here is the honest part: **Aden could not tell me why.** The tool I had just built to diagnose codebases could not diagnose this. What cracked it was diffing the actual artifact — two serialized index files, byte by byte — and reading what differed.
+
+It was non-determinism in indexing, and it had *five* root causes, peeled off one at a time:
+
+. a wall-clock timestamp baked into the indexed text, so every build tokenised a different date;
+. `HashMap` iteration order feeding the index;
+. an order-sensitive de-duplication;
+. a parallel write race on *basename collisions* — `openapi2/helpers.go` and `openapi3/helpers.go` both want the anchor `helpers.go#copyURI`;
+. and the sneakiest: attribute emission in `HashMap` order, which perturbed *tokenisation* just enough to flip a single borderline near-tie ranking. The aggregate index stats came out byte-identical; the recall still moved. That paradox is what finally pointed at the emitter.
+
+I had two false starts in there — fixes I *theorised* would work and did not. Each time the lesson was the one the offline-HTML discipline had already been teaching: **verify the artifact, do not theorise about it.** Retrieval is deterministic now — five fresh builds, byte-identical recall.
+
+== Act IV — shipping it like an adult
+
+A demo is not a release. Before this reached `main` I ran the gauntlet, and it earned its keep:
+
+* Aden's own pre-commit gate blocked on two *false positives* in my new files — its line-based linter saw `run_eval(` and cried "Python `eval()`," and its secret scanner flagged a `sha256` checksum as an API key. I fixed the scanner to skip checksum-manifest lines and renamed the function, so the gate stays honest rather than being silenced.
+* *Legal:* Aden vendors the MIT-licensed `force-graph` library *into the binary* but shipped only a one-line mention. MIT requires the copyright and permission notice travel with the code — so I reproduced it in full, and verified every dependency is AGPL-compatible.
+* *Security:* `aden view` inlines arbitrary-codebase data into a `<script>` tag — a symbol literally named `</script>` could break out and inject. Escaped.
+* And I caught my *own* mistake: a stray `git commit` swept an unfinished design proposal into a release commit. Moved it to its own branch so the release diff is clean.
+
+It shipped as **Aden 0.2.0**.
+
+== What I actually learned
+
+The sharpest pattern of the week: *Aden's value peaked when it was pointed at itself.* The viewer and the whole-graph export turned Aden into a diagnostic that found genuine bugs in Aden — the redundant edges, the pollution hub — that no amount of code-reading had surfaced. And the one place it *could not* help, root-causing the non-determinism, is precisely the place to grow it next.
+
+So the roadmap writes itself — turn this week's manual moves into commands:
+
+* `aden gen --verify` — build twice, diff the serialized index, report non-determinism *and the differing fields*. It would have caught the five-cause bug automatically instead of after five probes.
+* `aden graph diff` — make the artifact comparison I did by hand a first-class command.
+* `aden doctor` — run the structural rules that found the redundant-edge smell (edge redundancy, oversized hubs, anchor collisions, documentation coverage) as a graph-health audit.
+
+There is an honest boundary, and I want to keep it: Aden will not replace *diffing the real output* when something is genuinely wrong. But it can *own that diff* — produce a stable, serialized, diffable artifact and the commands to compare it. The lesson was never "the tool is magic." It was: build the tool so it can be pointed at itself, and then actually point it.
+
+[.text-center]
+_Next in the series: teaching Aden to verify itself — the determinism gate, `graph diff`, and `doctor`._
