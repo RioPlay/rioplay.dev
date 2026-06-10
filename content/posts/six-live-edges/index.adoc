@@ -201,7 +201,7 @@ The lesson is not that the code was carelessly written. It is that claims accumu
 ADR-007 puts a process between the idea and the claim. Three requirements before a type appears in any production surface. The policy does not stop new ideas from being written down. It stops them from looking like shipped capability until they are.
 
 [.text-center]
-_Next in the series: prose joins the graph. The cross-document `<<refs>>` in Aden's own documentation, and the glossary anchors on this blog, become real traversable edges — and this site becomes the test corpus._
+_Next in the series: link:/posts/prose-joins-the-graph/[Prose Joins the Graph]. The cross-document `+<<refs>>+` in Aden's own documentation, and the glossary anchors on this blog, become real traversable edges — and this site becomes the test corpus._
 
 [.sources]
 == Sources

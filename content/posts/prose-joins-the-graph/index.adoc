@@ -5,7 +5,7 @@ date: 2026-06-10
 lastmod: 2026-06-10
 draft: false
 summary: "Aden's thesis is that code and prose are co-equal citizens of one graph. For months, that was only half true. The cross-references in every documentation file produced no edges at all. This is the fix, the rule it exposed, and how this blog became the test corpus."
-description: "Part four of the Aden series: ADR-006 makes prose a first-class graph citizen. Cross-document <<refs>>, xref: links, and Markdown heading anchors become bidirectional RelatesTo edges. 58 unresolved references become 0. And this blog's own glossary links become real graph edges."
+description: "Part four of the Aden series: ADR-006 makes prose a first-class graph citizen. Cross-document anchor refs, xref: links, and Markdown heading anchors become bidirectional RelatesTo edges. 58 unresolved references become 0. And this blog's own glossary links become real graph edges."
 series: ["Aden"]
 categories: ["Aden"]
 tags: ["aden", "ai-tooling", "developer-tools", "knowledge-graph", "asciidoc", "markdown", "graph-edges", "documentation"]
@@ -16,15 +16,15 @@ TocOpen: false
 ---
 [.lead]
 Aden's founding claim is that code and prose are co-equal, typed, traversable citizens of one graph.
-For the first nine months that was only half true. The graph had symbols and calls and imports.
-It also had documentation nodes with a known problem: none of their cross-references produced edges.
-A glossary term was connected to the terms it defined. A post that _cited_ that term was a
-disconnected island. The `<<ref>>` was in the source. The edge was not.
+Until this week — the project is not yet a month old — that was only half true. The graph had
+symbols and calls and imports. It also had documentation nodes with a known problem: none of their
+cross-references produced edges. A glossary term was connected to the terms it defined. A post that
+_cited_ that term was a disconnected island. The `+<<ref>>+` was in the source. The edge was not.
 
 [NOTE]
 .The short version
 ====
-Prose `<<anchor>>` cross-references, `xref:` links, and Markdown `[text](#fragment)` heading anchors
+Prose `+<<anchor>>+` cross-references, `xref:` links, and Markdown `[text](#fragment)` heading anchors
 now become bidirectional `RelatesTo` <<_typed_edge,typed edges>> in the graph. A docs-only
 repository that had 58 unresolved reference warnings had zero after one `aden gen`. This blog's own
 glossary links are now real graph edges. The rule that made it work: extraction knows its format;
@@ -41,15 +41,15 @@ have caught this, but I ran the census on code. On prose, `RelatesTo` had the sa
 The failure had two parts, and they were independent.
 
 *First, prose references were never extracted.* A document node's `refs` attribute was populated
-only from _embedded code listings_ — `fn:`-prefixed names, struct references. The `<<glossary-term>>`
-cross-references and `xref:other-doc.adoc#section[...]` links between narrative documents went
+only from _embedded code listings_ — `fn:`-prefixed names, struct references. The `+<<glossary-term>>+`
+cross-references and `+xref:other-doc.adoc#section[...]+` links between narrative documents went
 into `/dev/null`. So a blog post that cited a glossary term produced no edge to that term, because
 the reference was never recorded.
 
-*Second, `check` was blind to the refs it should have found.* `collect_anchors` matched `[[x]]`
+*Second, `check` was blind to the refs it should have found.* `collect_anchors` matched `+[[x]]+`
 only when it was the full trimmed line — so the common inline description-list form
-`[[_term]]Term::` was invisible, and the check produced 58 "unresolved `<<ref>>`" warnings on a
-blog that had no broken references. The `<<x>>` in a `----` code block was treated as a live
+`+[[_term]]Term::+` was invisible, and the check produced 58 "unresolved `+<<ref>>+`" warnings on a
+blog that had no broken references. The `+<<x>>+` in a `----` code block was treated as a live
 reference and flagged, because the unresolved-ref scan had no listing-fence state.
 
 Both failures compounded each other: check reported broken references that were not broken, and
@@ -57,22 +57,22 @@ silently missed the edges that were.
 
 == The rule that made it solvable
 
-The design question was: where does format-awareness live? The `<<anchor>>` syntax is AsciiDoc.
+The design question was: where does format-awareness live? The `+<<anchor>>+` syntax is AsciiDoc.
 The `[text](#heading)` syntax is Markdown. The resolution step — taking a `ref:fragment` record
 and finding the node it points to — should not care.
 
 ADR-006 named the split:
 
 * *Extraction is per-format.* Each parser knows its own listing fences and backtick state. The
-  AsciiDoc parser fills `doc_refs` with `ref:<fragment>` entries for every `<<target>>`,
-  `<<target,label>>`, and `xref:file.adoc#fragment[...]`, but only when the reference appears
+  AsciiDoc parser fills `doc_refs` with `ref:<fragment>` entries for every `+<<target>>+`,
+  `+<<target,label>>+`, and `+xref:file.adoc#fragment[...]+`, but only when the reference appears
   outside a `----` or `....` delimited block or backtick spans. The Markdown parser does the
   same for `[text](#heading-slug)` links. A reference _shown as an example_ inside a code block
   is not a reference; the parser that knows its own delimiters is the only one that can tell.
 
 * *Resolution is format-neutral.* The linker in `link_store_edges` takes a `ref:` record and
   matches it by exact fragment against an index built from doc anchors _only_. It never consults
-  the code-symbol index. This is the constraint that prevents a prose `<<validate_token>>`
+  the code-symbol index. This is the constraint that prevents a prose `+<<validate_token>>+`
   from forging an edge to the function `validate_token` in `auth.rs`. In a docs graph, a reference
   means "the author wrote this link." It should resolve to what the author intended, not to the
   nearest name collision.
@@ -81,19 +81,19 @@ ADR-006 named the split:
 ----
 flowchart LR
   subgraph extract["Per-format extraction (parser)"]
-    ad["AsciiDoc parser\n<<anchor>>, xref:"]
-    md["Markdown parser\n[text](#slug)"]
+    ad["AsciiDoc parser<br/>anchor + xref refs"]
+    md["Markdown parser<br/>heading-slug links"]
   end
   subgraph resolve["Format-neutral resolution (linker)"]
-    li["link_store_edges\nmatches ref: against doc anchors only"]
+    li["link_store_edges<br/>matches ref: against doc anchors only"]
   end
-  subgraph graph["Graph"]
+  subgraph kg["Graph"]
     e1["post.adoc"] -->|RelatesTo| e2["glossary.adoc#_term"]
     e2 -->|RelatesTo| e1
   end
   ad --> li
   md --> li
-  li --> graph
+  li --> kg
 ----
 
 The bidirectionality follows from the same principle: a reference is a relationship, not a
@@ -104,10 +104,10 @@ reach every post that cited it. Both directions are emitted from a single `ref:`
 
 The same fence-awareness that made extraction correct also made `check` honest.
 
-`collect_anchors` was rewritten to gather _all_ `[[...]]` declarations per line, not just
-lines where the anchor is the only content. The inline form `[[_term]]Term::` — the standard
+`collect_anchors` was rewritten to gather _all_ `+[[...]]+` declarations per line, not just
+lines where the anchor is the only content. The inline form `+[[_term]]Term::+` — the standard
 AsciiDoc description-list convention — now registers as an anchor. And `collect_refs` replaced
-a per-line `find_refs` loop with a full fence-aware pass over the document, so a `<<ref>>`
+a per-line `find_refs` loop with a full fence-aware pass over the document, so a `+<<ref>>+`
 inside a listing block is skipped rather than flagged.
 
 The result on the docs-only repo where the problem was first clearly visible:
@@ -116,13 +116,13 @@ The result on the docs-only repo where the problem was first clearly visible:
 |===
 | Metric | Before → After
 
-| Unresolved `<<ref>>` warnings
+| Unresolved `+<<ref>>+` warnings
 | 58 → *0*
 
-| Inline `[[_term]]` anchors recognised
+| Inline `+[[_term]]+` anchors recognised
 | 0 → *all*
 
-| `<<ref>>` inside `----` blocks flagged
+| `+<<ref>>+` inside `----` blocks flagged
 | yes → *no*
 |===
 
@@ -135,15 +135,15 @@ reordering the docs.
 
 There is an honest circularity here worth naming. This blog is written in AsciiDoc. It links
 to the glossary throughout. Before ADR-006, those links were rendered by Hugo and
-invisible to Aden's graph — `link:/glossary/#_blast_radius[blast radius]` is a Hugo template
-expression, not an AsciiDoc cross-reference, and the graph never touched it.
+invisible to Aden's graph — `+link:/glossary/#_blast_radius[blast radius]+` is a Hugo-side
+link macro, not a graph-visible cross-reference, and the graph never touched it.
 
 After shipping ADR-006 the obvious question was whether the blog itself would hold up as a
 test corpus. Converting the Hugo links to AsciiDoc `xref:` syntax was straightforward. What
 it revealed was less obvious: the glossary's own anchors were written in Markdown (`anchor`
-attributes in Hugo data), not AsciiDoc `[[_term]]` form. Updating them made the glossary
-a proper AsciiDoc anchor set, and the `xref:../../glossary.adoc[_blast_radius]` links in the
-posts resolved to it.
+attributes in Hugo data), not AsciiDoc `+[[_term]]+` form. Updating them made the glossary
+a proper AsciiDoc anchor set, and the `+xref:../../glossary.adoc#_blast_radius[...]+` links in
+the posts resolved to it.
 
 Running `aden gen` on the blog after the conversion:
 

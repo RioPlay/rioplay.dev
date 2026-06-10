@@ -80,7 +80,7 @@ An open protocol that lets AI clients call external tools through a uniform inte
 A hub page for one broad topic that links down to the specific <<_cluster,cluster>> posts and that they link back up to. link:/series/aden/[The Aden series] index is a pillar page.
 
 [[_relates_to]]RelatesTo (edge)::
-A <<_typed_edge,typed edge>> for cross-document prose references — an `<<anchor>>` citation,
+A <<_typed_edge,typed edge>> for cross-document prose references — an `+<<anchor>>+` citation,
 an `xref:` link, or a Markdown `[text](#heading)` link from one document to another. Emitted
 bidirectionally: both the citing and the cited node are reachable from each other. It is the
 prose-stratum counterpart to `Calls` in the code stratum. `query --backlinks` on a glossary
