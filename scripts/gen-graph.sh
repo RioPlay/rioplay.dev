@@ -3,7 +3,7 @@
 set -e
 cd "$(git rev-parse --show-toplevel)"
 echo "Generating blog knowledge graph..."
-aden gen ./content --auto --quiet
+aden regen ./content
 mkdir -p static/graph
-aden view --mode communities --unlimited --no-open --out static/graph/index.html
+aden view --mode graph --unlimited --no-open --out static/graph/index.html
 echo "✓ Graph written to static/graph/index.html"
