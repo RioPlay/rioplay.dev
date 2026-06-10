@@ -21,7 +21,7 @@ A <<_referential_context_compiler,referential context compiler>>: it compiles co
 A stable identifier for a node in <<_aden,Aden>>'s <<_knowledge_graph,knowledge graph>>, written as a URI such as `aden://module/<crate>/<file>#<symbol>`. Every symbol, documentation heading, and edge endpoint is named by its anchor, so context and cross-references stay valid across files and runs. (When two files share a basename the naive anchor can collide — a subtlety explored in link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].)
 
 [[_blast_radius]]Blast radius::
-Everything a change can affect downstream. If you alter a function, its blast radius is every symbol that transitively depends on it. <<_aden,Aden>> answers this by walking <<_typed_edge,typed edges>> rather than guessing. Also called <<_impact_analysis,impact analysis>>.
+The transitive set of callers and referencers of a changed symbol: everything that depends on it, and could therefore break. <<_aden,Aden>> answers this by walking *incoming* <<_typed_edge,typed edges>> from the changed symbols outward. The direction matters: "what calls this" is an incoming traversal; "what this calls" is outgoing and is not blast radius. Also called <<_impact_analysis,impact analysis>>. See link:/posts/six-live-edges/[Six Live Edges].
 
 [[_bm25]]BM25::
 A classic keyword-ranking function that scores documents by term overlap with a query. It is fast and exact for shared vocabulary but blind to meaning, so it cannot tell that "login" and "authenticate" are related. Paired with <<_dense_retrieval,dense retrieval>> in <<_hybrid_retrieval,hybrid retrieval>>. +
@@ -50,6 +50,9 @@ The property that identical input always produces a byte-identical index and the
 [[_dogfooding]]Dogfooding::
 Using your own tool on itself. Running <<_aden,Aden>> against Aden's own codebase turned the graph viewer into a diagnostic that surfaced real bugs in Aden — redundant edges and a pollution hub — that code review had missed. The strongest argument that a tool works is that it improves itself. See link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
 
+[[_edge_activation]]Edge activation policy::
+The rule from ADR-007 governing when an edge type may appear in <<_aden,Aden>>'s production surfaces: an edge type is real only when it has an emitter (something in `gen` produces it deterministically), a consumer (a traversal or filter acts on it), and an eval (a test proves it changes an answer for the better). A filter list must not name an edge type that has no emitter. The census on Aden's own codebase moved from six live types to nine after wave 1 activated `Tests`, `Implements`, and `Mutates`. See link:/posts/six-live-edges/[Six Live Edges].
+
 [[_drift]]Drift::
 The gap that opens when code changes but the prose, contracts, or notes describing it do not. <<_aden,Aden>>'s `heal` command detects drift by comparing the graph against its recorded contracts, so documentation rot becomes a checkable condition instead of a surprise.
 
@@ -64,7 +67,7 @@ How <<_aden,Aden>> renders the <<_knowledge_graph,knowledge graph>> for humans. 
 Combining keyword search (<<_bm25,BM25>>) and meaning-based search (<<_dense_retrieval,dense retrieval>>) into one ranking with <<_rrf,Reciprocal Rank Fusion>>. You get exact matches and conceptual matches in a single result list. It meets or beats BM25 on every corpus tested — Go, Rust, C#, Python, and TypeScript — measured in link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
 
 [[_impact_analysis]]Impact analysis::
-Determining what a proposed change will affect before you make it, the forward view of <<_blast_radius,blast radius>>. <<_aden,Aden>>'s `impact-diff` runs it against a Git diff, so a pull request can show its own reach.
+Determining what a proposed change will affect before you make it, the forward view of <<_blast_radius,blast radius>>. <<_aden,Aden>>'s `impact-diff` runs it against a Git diff, reporting the blast radius, risk tier, and an affected-tests section that shows which test files have `Tests` edges into the changed symbols or their dependents. See link:/posts/six-live-edges/[Six Live Edges].
 
 [[_knowledge_graph]]Knowledge graph::
 A directed graph where every function, module, and decision is a node, and every relationship (calls, imports, constraints) is a <<_typed_edge,typed edge>>. It makes the structure of a codebase explicit and queryable rather than implicit and scattered.

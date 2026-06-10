@@ -1,0 +1,210 @@
+---
+title: "Six Live Edges"
+slug: "six-live-edges"
+date: 2026-06-09
+lastmod: 2026-06-09
+draft: false
+summary: "Aden's graph declared more than twenty typed relationships. Six had actual emitters. The rest appeared in filter lists and impact traversals, looking like capability while contributing nothing. This is the audit, the policy that came out of it, and three edge types that actually earned their names."
+description: "Part three of the Aden series: a typed-edge census finds six live types out of twenty-plus declared; ADR-007 sets the activation policy; impact-diff's blast-radius direction is corrected; and wave 1 activates Tests, Implements, and Mutates."
+series: ["Aden"]
+categories: ["Aden"]
+tags: ["aden", "ai-tooling", "developer-tools", "knowledge-graph", "rust", "edge-types", "impact-analysis", "testing"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+A typed graph carries a claim. Every variant in the `EdgeType` enum asserts that Aden can detect and use that kind of relationship. After shipping link:/posts/the-graph-that-audited-itself/[the viewer] and the `Contains` split, I did what I should have done earlier: I counted the ones that were real.
+
+[NOTE]
+.The short version
+====
+Aden's graph declared more than twenty <<_typed_edge,typed edge>> types and six had actual emitters. Most of the rest sat in filter lists, named as if they contributed signal, contributing nothing. A census exposed the gap, ADR-007 set the policy, and three edge types now earn their names: `Tests`, `Implements`, and `Mutates`. The <<_blast_radius,blast radius>> traversal in `impact-diff` was also running backwards and is now correct.
+====
+
+== The census
+
+Running `aden viz --mode graph -j` on Aden's own source gives a whole-graph view of every node and typed edge. A count of which `EdgeType` variants had nonzero occurrences produced a short list.
+
+Six: `Calls`, `Uses`, `PartOf`, `Contains`, `Documents`, `RelatesTo`.
+
+That is a small number for a graph modeling relationships across 300-plus languages, and the smallness was not the interesting part. The interesting part was where the zero-count types appeared.
+
+Several of them, including `Mutates`, `Implements`, `Invokes`, and `Constrains`, were listed in `impact_edge_types()`, the filter that determines what traversals the blast-radius walk considers. They were named there as if they contributed to the answer. They contributed nothing, because they were never emitted. A filter entry that names an edge type with no emitter is not a gap to fill later. It is a claim about current behavior that is false.
+
+[quote]
+____
+A filter entry that names an edge type with no emitter is a claim about current behavior that is false.
+____
+
+This is quiet misinformation. The code compiles. Tests pass. The function returns a valid list. But the tool communicates that it is considering `Implements` edges and `Mutates` edges, and the answer it gives reflects neither, because neither exists in the graph.
+
+== Impact-diff was answering the wrong question
+
+The census found the quiet failures. There was also a loud one, though it had been quiet too until I looked directly at it.
+
+`aden impact-diff` maps a git diff to the symbols it touches and reports the <<_blast_radius,blast radius>>: the set of things that would break if those symbols changed. The correct way to answer that question is to walk *incoming* edges, the callers and referencers of the changed symbols. What `impact-diff` was doing was walking *outgoing* edges, the things the changed code calls.
+
+Those are opposite directions.
+
+[.mermaid]
+----
+flowchart TB
+  subgraph wrong["impact-diff before: outgoing traversal (shows callees)"]
+    vt1["validate_token()"] -->|Calls| d1["db_query()"]
+    vt1 -->|Calls| d2["jwt_parse()"]
+  end
+  subgraph right["impact-diff after: incoming traversal (shows callers)"]
+    c1["login_handler()"] -->|Calls| vt2["validate_token()"]
+    c2["session_check()"] -->|Calls| vt2
+  end
+----
+
+A function with fifty callers and zero callees would score a blast radius of zero. A function with zero callers and fifty callees would score fifty. The feature was computing reach instead of risk. "What breaks if I change this?" is the whole point of the command, and the traversal direction is the whole answer. The fix was a one-line change; finding it required looking directly at what the output actually meant in a real example.
+
+== What earns an edge type
+
+The census and the direction bug pointed at the same underlying problem: there was no rule for what it meant for an edge type to exist in the graph. The enum grew with every idea for how the graph might eventually be expressive. Filter lists grew with every traversal that might eventually benefit from more types. None of it was wrong in intent. All of it was optimistic about how much was real.
+
+ADR-007 establishes the rule. An edge type is real only when it has all three of the following:
+
+* an *emitter*, something in `gen` or parsing that produces the edge deterministically
+* a *consumer*, a traversal or filter in `ask`, `asm`, `query`, or `impact-diff` that acts on it
+* an *eval*, a query or test that proves the edge changes an answer for the better
+
+"Activated" means a nonzero, verified count in the live graph census, not a merged enum variant. A filter list must not name an edge type that has no emitter. The three requirements are not documentation for a future state. They are the precondition for a type appearing in any production surface.
+
+The rule is deliberately strict. The typing in Aden's graph is supposed to be what distinguishes it from a bag of text. A <<_typed_edge,typed edge>> that carries no signal is not just useless; it makes the graph look more expressive than it is.
+
+== Wave 1: three activations
+
+With the policy in place, the question became which types were closest to earning their names. Three had most of the necessary work already done.
+
+=== Tests
+
+A test function calling the code under test already produces a `Calls` edge. The additional signal is the source: if the caller lives in a test file, that call is also a `Tests` relationship. The emitter runs a path check alongside every resolved call and co-emits `Tests` when the source is a test.
+
+[.mermaid]
+----
+flowchart LR
+  T["test_validate_token()"]
+  F["validate_token()"]
+  T -->|Calls| F
+  T -->|Tests| F
+----
+
+The consumer is `impact-diff`. Before this, the blast-radius report showed which symbols were at risk. After, `impact-diff` always includes an affected-tests section: the test sources with `Tests` edges into any touched symbol or its dependents. You see which test files cover the changed code before you push.
+
+[source,bash]
+----
+$ aden impact-diff
+Changed symbols
+  auth/login.rs#validate_token (degree: 4)
+
+Blast radius
+  session.rs#refresh_session
+  middleware.rs#require_auth
+
+Affected tests
+  tests/auth_tests.rs      (Tests → validate_token)
+  tests/session_tests.rs   (Tests → validate_token via refresh_session)
+
+Risk: medium
+----
+
+The census on Aden's own codebase found 138 `Tests` edges, all deterministic across regens.
+
+=== Implements
+
+Rust's `impl Trait for T` blocks connect a concrete type to a trait contract. When a coding agent asks for the blast radius of a change to a trait, the graph should reach every type that promises to satisfy that contract. Before wave 1, it stopped at the trait boundary.
+
+[.mermaid]
+----
+flowchart LR
+  T["trait AuthProvider"]
+  I1["LocalAuth"] -->|Implements| T
+  I2["OAuthClient"] -->|Implements| T
+  I3["MockAuth"] -->|Implements| T
+  style T fill:#6366f1,color:#fff
+----
+
+The emitter extracts `impl Trait for T` relationships from the Rust parser and links each implementor's methods back to the corresponding trait methods. The blast radius of changing a trait now reaches the types that implement it, which is where the actual breakage lives.
+
+The mechanism is language-agnostic by design. The Rust parser is the first emitter, but the linker that resolves `impl` declarations to trait definitions does not know it is in Rust. Interface implementation is a concept with equivalents in Go, Java, TypeScript, and every language with structural or nominal polymorphism. The census on Aden's own codebase: 75 `Implements` edges.
+
+=== Mutates
+
+A `&mut self` method changes the state of its receiver type. That relationship was already captured by the parser, which recorded the receiver for every extracted method. The emitter was not using it.
+
+Activating `Mutates` required connecting the receiver to the parent type on the way out and adding the edge type to the relevant traversal set. The signal was already in the data; the gap was in the emission step. The census on Aden's own codebase after activation: 16 `Mutates` edges.
+
+Sixteen is a small number. The principle matters more than the count. A `&mut self` method communicates mutation intent to anyone reading Rust code. The graph should communicate it too, because it is the same information.
+
+== The new census
+
+Before wave 1: six live edge types. After: nine.
+
+[cols="3,1,1",options="header"]
+|===
+| EdgeType | Live before wave 1 | Live after wave 1
+
+| Calls
+| yes
+| yes
+
+| Uses
+| yes
+| yes
+
+| PartOf
+| yes
+| yes
+
+| Contains
+| yes
+| yes
+
+| Documents
+| yes
+| yes
+
+| RelatesTo
+| yes
+| yes
+
+| Tests
+| no (0)
+| yes (138)
+
+| Implements
+| no (0)
+| yes (75)
+
+| Mutates
+| no (0)
+| yes (16)
+|===
+
+All nine are deterministic across repeated `aden regen` runs. Every remaining zero-count variant was either removed from the impact filter or given an emitter. The filter list names only types that exist in the graph.
+
+== What the pattern keeps teaching me
+
+link:/posts/the-graph-that-audited-itself/[The last post] ended with a roadmap: `aden gen --verify`, `aden graph diff`, and `aden doctor`. None of those shipped. What shipped instead was a closer look at whether the graph was being honest about itself, and that turned out to be the more useful thing to build.
+
+The pattern from that post was: build something, point it at itself, it finds something real. The viewer found the `Documents` redundancy and the `mod-unknown` pollution hub. The census found the phantom edge types. The benchmark harness from the same stretch found the `aden gen` non-determinism bug on its first run.
+
+In each case, the tool generated a summary that was possible to look at directly. An HTML graph. A type count. A benchmark table. And in each case, looking directly found something that reading the code had not.
+
+The lesson is not that the code was carelessly written. It is that claims accumulate faster than evidence. The enum grew with each idea. The filter list grew with each traversal. The direction of the blast-radius walk never had a test that questioned it. None of these were bad decisions at the time they were made. They all accumulated into a gap between what the graph claimed to model and what it actually did.
+
+ADR-007 puts a process between the idea and the claim. Three requirements before a type appears in any production surface. The policy does not stop new ideas from being written down. It stops them from looking like shipped capability until they are.
+
+[.text-center]
+_Next in the series: prose joins the graph. The cross-document `<<refs>>` in Aden's own documentation, and the glossary anchors on this blog, become real traversable edges — and this site becomes the test corpus._
+
+[.sources]
+== Sources
+
+. Aden source: the https://github.com/RioPlay/aden[Aden repository^], specifically `crates/aden-cli/src/commands/impact_diff.rs`, `crates/aden-cli/src/commands/generate.rs`, `crates/aden-cli/tests/wave1_edges.rs`, and `docs/adr-007-typed-edge-model.adoc`.
+. The xref:../../glossary.adoc[site glossary] defines and sources every term used above. This site is built with https://asciidoctor.org[Asciidoctor^].
