@@ -79,6 +79,15 @@ An open protocol that lets AI clients call external tools through a uniform inte
 [[_pillar_page]]Pillar page::
 A hub page for one broad topic that links down to the specific <<_cluster,cluster>> posts and that they link back up to. link:/series/aden/[The Aden series] index is a pillar page.
 
+[[_relates_to]]RelatesTo (edge)::
+A <<_typed_edge,typed edge>> for cross-document prose references — an `<<anchor>>` citation,
+an `xref:` link, or a Markdown `[text](#heading)` link from one document to another. Emitted
+bidirectionally: both the citing and the cited node are reachable from each other. It is the
+prose-stratum counterpart to `Calls` in the code stratum. `query --backlinks` on a glossary
+term returns every document that has a `RelatesTo` edge into it. See
+link:/posts/prose-joins-the-graph/[Prose Joins the Graph]. +
+[.ref]#Defined in `docs/adr-006-prose-graph-references.adoc` in the https://github.com/RioPlay/aden[Aden repository^]#
+
 [[_referential_context_compiler]]Referential context compiler::
 A tool that reads source material and emits not a rendering of it but a navigable map of how its parts reference each other. It is the category <<_aden,Aden>> defines for itself. The output is meant to be reasoned over, not just read.
 

@@ -1,0 +1,204 @@
+---
+title: "Prose Joins the Graph"
+slug: "prose-joins-the-graph"
+date: 2026-06-10
+lastmod: 2026-06-10
+draft: false
+summary: "Aden's thesis is that code and prose are co-equal citizens of one graph. For months, that was only half true. The cross-references in every documentation file produced no edges at all. This is the fix, the rule it exposed, and how this blog became the test corpus."
+description: "Part four of the Aden series: ADR-006 makes prose a first-class graph citizen. Cross-document <<refs>>, xref: links, and Markdown heading anchors become bidirectional RelatesTo edges. 58 unresolved references become 0. And this blog's own glossary links become real graph edges."
+series: ["Aden"]
+categories: ["Aden"]
+tags: ["aden", "ai-tooling", "developer-tools", "knowledge-graph", "asciidoc", "markdown", "graph-edges", "documentation"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+Aden's founding claim is that code and prose are co-equal, typed, traversable citizens of one graph.
+For the first nine months that was only half true. The graph had symbols and calls and imports.
+It also had documentation nodes with a known problem: none of their cross-references produced edges.
+A glossary term was connected to the terms it defined. A post that _cited_ that term was a
+disconnected island. The `<<ref>>` was in the source. The edge was not.
+
+[NOTE]
+.The short version
+====
+Prose `<<anchor>>` cross-references, `xref:` links, and Markdown `[text](#fragment)` heading anchors
+now become bidirectional `RelatesTo` <<_typed_edge,typed edges>> in the graph. A docs-only
+repository that had 58 unresolved reference warnings had zero after one `aden gen`. This blog's own
+glossary links are now real graph edges. The rule that made it work: extraction knows its format;
+resolution knows nothing about format at all.
+====
+
+== The gap
+
+Aden's graph has a citation relationship: `RelatesTo`. It appeared in the type system from early on,
+and it appeared in the filter lists for traversal. link:/posts/six-live-edges/[The census] would
+have caught this, but I ran the census on code. On prose, `RelatesTo` had the same problem as
+`Implements` before wave 1: it was declared, not emitted.
+
+The failure had two parts, and they were independent.
+
+*First, prose references were never extracted.* A document node's `refs` attribute was populated
+only from _embedded code listings_ — `fn:`-prefixed names, struct references. The `<<glossary-term>>`
+cross-references and `xref:other-doc.adoc#section[...]` links between narrative documents went
+into `/dev/null`. So a blog post that cited a glossary term produced no edge to that term, because
+the reference was never recorded.
+
+*Second, `check` was blind to the refs it should have found.* `collect_anchors` matched `[[x]]`
+only when it was the full trimmed line — so the common inline description-list form
+`[[_term]]Term::` was invisible, and the check produced 58 "unresolved `<<ref>>`" warnings on a
+blog that had no broken references. The `<<x>>` in a `----` code block was treated as a live
+reference and flagged, because the unresolved-ref scan had no listing-fence state.
+
+Both failures compounded each other: check reported broken references that were not broken, and
+silently missed the edges that were.
+
+== The rule that made it solvable
+
+The design question was: where does format-awareness live? The `<<anchor>>` syntax is AsciiDoc.
+The `[text](#heading)` syntax is Markdown. The resolution step — taking a `ref:fragment` record
+and finding the node it points to — should not care.
+
+ADR-006 named the split:
+
+* *Extraction is per-format.* Each parser knows its own listing fences and backtick state. The
+  AsciiDoc parser fills `doc_refs` with `ref:<fragment>` entries for every `<<target>>`,
+  `<<target,label>>`, and `xref:file.adoc#fragment[...]`, but only when the reference appears
+  outside a `----` or `....` delimited block or backtick spans. The Markdown parser does the
+  same for `[text](#heading-slug)` links. A reference _shown as an example_ inside a code block
+  is not a reference; the parser that knows its own delimiters is the only one that can tell.
+
+* *Resolution is format-neutral.* The linker in `link_store_edges` takes a `ref:` record and
+  matches it by exact fragment against an index built from doc anchors _only_. It never consults
+  the code-symbol index. This is the constraint that prevents a prose `<<validate_token>>`
+  from forging an edge to the function `validate_token` in `auth.rs`. In a docs graph, a reference
+  means "the author wrote this link." It should resolve to what the author intended, not to the
+  nearest name collision.
+
+[.mermaid]
+----
+flowchart LR
+  subgraph extract["Per-format extraction (parser)"]
+    ad["AsciiDoc parser\n<<anchor>>, xref:"]
+    md["Markdown parser\n[text](#slug)"]
+  end
+  subgraph resolve["Format-neutral resolution (linker)"]
+    li["link_store_edges\nmatches ref: against doc anchors only"]
+  end
+  subgraph graph["Graph"]
+    e1["post.adoc"] -->|RelatesTo| e2["glossary.adoc#_term"]
+    e2 -->|RelatesTo| e1
+  end
+  ad --> li
+  md --> li
+  li --> graph
+----
+
+The bidirectionality follows from the same principle: a reference is a relationship, not a
+one-way pointer. When a post cites a glossary term, `query --backlinks` on that term should
+reach every post that cited it. Both directions are emitted from a single `ref:` record.
+
+== `check` becomes honest
+
+The same fence-awareness that made extraction correct also made `check` honest.
+
+`collect_anchors` was rewritten to gather _all_ `[[...]]` declarations per line, not just
+lines where the anchor is the only content. The inline form `[[_term]]Term::` — the standard
+AsciiDoc description-list convention — now registers as an anchor. And `collect_refs` replaced
+a per-line `find_refs` loop with a full fence-aware pass over the document, so a `<<ref>>`
+inside a listing block is skipped rather than flagged.
+
+The result on the docs-only repo where the problem was first clearly visible:
+
+[cols="2,1",options="header"]
+|===
+| Metric | Before → After
+
+| Unresolved `<<ref>>` warnings
+| 58 → *0*
+
+| Inline `[[_term]]` anchors recognised
+| 0 → *all*
+
+| `<<ref>>` inside `----` blocks flagged
+| yes → *no*
+|===
+
+Zero does not mean "suppressed." It means the references that existed in the prose now have
+targets in the graph, because extraction found the refs and resolution found the anchors. The
+warnings that remained were real: anchors referenced before they were declared, fixed by
+reordering the docs.
+
+== The blog as the test corpus
+
+There is an honest circularity here worth naming. This blog is written in AsciiDoc. It links
+to the glossary throughout. Before ADR-006, those links were rendered by Hugo and
+invisible to Aden's graph — `link:/glossary/#_blast_radius[blast radius]` is a Hugo template
+expression, not an AsciiDoc cross-reference, and the graph never touched it.
+
+After shipping ADR-006 the obvious question was whether the blog itself would hold up as a
+test corpus. Converting the Hugo links to AsciiDoc `xref:` syntax was straightforward. What
+it revealed was less obvious: the glossary's own anchors were written in Markdown (`anchor`
+attributes in Hugo data), not AsciiDoc `[[_term]]` form. Updating them made the glossary
+a proper AsciiDoc anchor set, and the `xref:../../glossary.adoc[_blast_radius]` links in the
+posts resolved to it.
+
+Running `aden gen` on the blog after the conversion:
+
+* Every `xref:` link in every post produced a `RelatesTo` edge to the glossary term it cited.
+* Every glossary term produced `RelatesTo` edges back to the posts that reference it.
+* `aden query --backlinks "aden://doc/blog/glossary.adoc#_blast_radius"` returned
+  every post in the series that uses the term — link:/posts/introducing-aden/[part one],
+  link:/posts/six-live-edges/[part three], and this one.
+* `aden check .` on the blog reported zero unresolved references.
+
+The blog is now an aden-indexed corpus, and the site you are reading generates its own graph.
+
+== Cache invalidation
+
+One practical detail matters for anyone upgrading an existing project: prose references are only
+emitted from files processed in a given `gen` run. Without a cache invalidation signal, a file
+that was mtime-skipped on the previous run would never gain its new edges — it would not be
+re-processed, so `link_store_edges` would never see its refs.
+
+`GEN_LOGIC_VERSION` was bumped from 2 to 3. A version mismatch invalidates stale gen caches on
+first run after upgrade. Every file is reprocessed once; from the next run on, the normal
+mtime-based incremental build applies. One full re-gen on upgrade is the correct cost for a
+structural change to what the graph means.
+
+== What the thesis now actually means
+
+The ADR says it plainly, and I will repeat it here because it is the whole point: *aden is
+polyglot at every level, and nothing is AsciiDoc-specific or repo-specific at the design
+level.* Markdown docs participate the same way. Adding a format means adding one extractor;
+resolution is untouched.
+
+This matters beyond documentation coverage. The graph's `Documents` edge was freed in the
+last post to mean _only_ prose-to-code. `RelatesTo` now carries the cross-document prose
+signal. Between them, and with `Contains`/`PartOf` for structural containment and
+`Calls`/`Uses` for code-level dependencies, the graph has a meaningful, distinct edge type
+for every relationship an author would actually draw on a whiteboard. Each type answers a
+different question. None of them overlap.
+
+A codebase is not just a directory of source files. It is a system of documented,
+cross-referenced, version-controlled decisions. Aden's graph is a claim that it can model
+the whole thing — not the code stratum alone. ADR-006 is the point where that claim became
+true for the prose stratum too.
+
+[.text-center]
+_Next in the series: asking better questions — how routing, source hydration, and a density
+eval harness turned `ask` from a thin-stub machine into a context assembler that actually
+fills its budget._
+
+[.sources]
+== Sources
+
+. Aden source: the https://github.com/RioPlay/aden[Aden repository^], specifically
+  `docs/adr-006-prose-graph-references.adoc`, `crates/aden-parse/src/asciidoc.rs`,
+  `crates/aden-parse/src/markdown.rs`, `crates/aden-emit/src/check.rs`,
+  `crates/aden-cli/src/commands/generate.rs`, and
+  `crates/aden-cli/tests/prose_xref_edges.rs`.
+. The xref:../../glossary.adoc[site glossary] defines and sources every term used above.
+  This site is built with https://asciidoctor.org[Asciidoctor^].

@@ -13,9 +13,10 @@ cover:
 1. [**Introducing Aden**](/posts/introducing-aden/) covers the context problem, what Aden does, how the pipeline works, and how it has evolved.
 2. [**The Graph That Audited Itself**](/posts/the-graph-that-audited-itself/) builds the interactive graph viewer, points Aden at its own codebase to find real bugs, and chases a five-cause non-determinism hunt to a reproducible 0.2.0 release.
 3. [**Six Live Edges**](/posts/six-live-edges/) audits the graph model itself: most declared edge types had no emitter, `impact-diff` was walking the wrong direction, and three new types — `Tests`, `Implements`, `Mutates` — earn their names.
+4. [**Prose Joins the Graph**](/posts/prose-joins-the-graph/) makes prose a first-class graph citizen: cross-document `<<refs>>`, `xref:` links, and Markdown heading anchors become bidirectional `RelatesTo` edges. 58 unresolved warnings become 0, and this blog's own glossary links become real graph edges.
 
 ### Coming up
 
-Future posts will go deeper on individual pieces: prose joining the graph as a first-class citizen, drift detection, the graph algorithms, and broader benchmarks. Each links back to the [glossary](/glossary/) for shared terms.
+Future posts go deeper on individual pieces: the `ask` routing and density rewrite, drift detection, the graph algorithms, and broader benchmarks. Each links back to the [glossary](/glossary/) for shared terms.
 
 > This is a [pillar page](/glossary/#_pillar_page): a hub for one topic that links down to the specific posts (the cluster) and that they link back up to. It is the same structure the rest of the site uses.
