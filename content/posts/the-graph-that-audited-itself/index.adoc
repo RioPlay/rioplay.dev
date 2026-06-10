@@ -149,4 +149,4 @@ So the roadmap writes itself — turn this week's manual moves into commands:
 There is an honest boundary, and I want to keep it: Aden will not replace *diffing the real output* when something is genuinely wrong. But it can *own that diff* — produce a stable, serialized, diffable artifact and the commands to compare it. The lesson was never "the tool is magic." It was: build the tool so it can be pointed at itself, and then actually point it.
 
 [.text-center]
-_Next in the series: teaching Aden to verify itself — the determinism gate, `graph diff`, and `doctor`._
+_Next in the series: link:/posts/six-live-edges/[Six Live Edges] — a census finds six live edge types out of twenty-plus declared, ADR-007 sets the activation policy, and three types earn their names._
