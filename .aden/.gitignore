@@ -9,4 +9,7 @@ staging/
 !overlays/
 !constitution.adoc
 !hooks/
-!project.conf
+
+# project.conf holds a machine-specific absolute path — kept local, ignored at
+# the repo root (.gitignore). Intentionally NOT re-included here.
+project.conf

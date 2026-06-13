@@ -8,6 +8,10 @@
 
 # Aden index config (local tooling, not site content)
 .adenignore
+# Aden's per-project config holds a machine-specific absolute path — don't commit
+.aden/project.conf
+# Stray nested Aden project roots accidentally created under content/
+/content/**/.aden/
 
 # Pagefind (if used) output
 /public/pagefind/
