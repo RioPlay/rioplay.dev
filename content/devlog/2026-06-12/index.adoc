@@ -1,0 +1,152 @@
+---
+title: "Devlog: 2026-06-12"
+slug: "2026-06-12"
+date: 2026-06-12
+lastmod: 2026-06-12
+draft: false
+summary: ""
+categories: ["Devlog"]
+tags: ["aden", "devlog"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+== License/attribution audit
+
+Multi-agent workflow audited the full dependency tree for license/attribution
+correctness.  23 confirmed issues fixed in commit `932b1b5`:
+
+* OWASP reference in README updated from CC BY-SA 3.0 to 4.0.
+* `dyn-eq` and `rust-stemmers` added to NOTICE.
+* Correct tree-sitter copyright holder recorded.
+* Three.js license text reproduced where required.
+* Duplicate "All rights reserved" blocks removed from 3 test files.
+
+Prevention tooling added in the same commit: `deny.toml` (cargo-deny policy),
+a `license-check` CI job, and a PR template checklist item.
+
+== Polyglot agnosticism audit
+
+48 confirmed gaps across 6 layers (extraction, anchor, edge, test, docs, runtime).
+Verdict: *partially language-agnostic* — the store, anchor scheme, contracts, and
+CLI are genuinely neutral; the extraction tier is Rust-first with uneven depth for
+other languages.
+
+Full gap inventory filed in `aden-open-issues.md` under
+"Polyglot Agnosticism Gaps (2026-06-12 audit)".
+
+== Six remediation waves (multi-model delegation)
+
+Fixes landed across the day in commit order:
+
+[cols="1,3", options="header"]
+|===
+|Commit |Change
+
+|`520107e` |Canonical project-name inference — Python "unknown" vs "src" divergence
+            fixed; Maven/Gradle/Gemfile manifests added; 4 divergent implementations
+            merged into one.
+|`836ce24` |Python docstring extraction bug — tree-sitter `block > string` traversal
+            was silently dropping every Python docstring; degenerate merge proposals
+            downstream were the symptom.
+|`8520bde` |Python tests + Kotlin name-extraction fix — `child_by_field_name("name")`
+            returns `None` in the Kotlin tree-sitter grammar; every method node was
+            dropped.  Unit tests added for both extractors.
+|`7ada58a` |Doc-fence code-reference extraction for 6 additional languages.
+|`d7cc3ea` + `efc7713` |`EdgeType::ALL` const + `Extends`/`Imports` variants — fixes
+                        the `build_from_storage` hand-written edge-type list that
+                        silently dropped new edge types on load.  `Imports` variant
+                        wired; emission deferred until import-edge extraction lands.
+|`70dc968` |`edge::implements` emitted by Java, TypeScript, and Python resolvers.
+|`ba1af47` |Unicode overlay slug collisions fixed in `sanitize_anchor_filename`.
+|`56fc23c` |All-frameworks test runner + A06 reads Cargo.lock instead of source lines.
+|`3e4ff2d` |Runner working directories set via `.current_dir()` on all language runners.
+|`be92d95` |`--propose` store-open hoisted once per invocation (was one fjall open per
+            event, ~250 ms each).
+|`85e0a60` |Dead Rust-shaped schema structs (`SymbolKind`, `FunctionSig`, `TypeDef`,
+            `TypeKind`, `Visibility::Crate/Super`) removed.
+|`eaec75f` |`rust-deep` feature flag dropped; no language now has an asymmetric flag.
+|`19d1229` + `79bbc08` + `94f04ee` + `82dbfe2` |Polish: src/ priority sort, naming
+            cleanup (`crate_from_anchor` → `module_from_anchor`), lint message
+            qualifier, `make_anchor` docstring, prose-extension open set, doc examples
+            for non-Rust paths.
+|`0732421` |Doc claims aligned: "300+ languages" qualified, call-graph deep-vs-generic
+            noted, two-tier extraction section added, PowerShell deep-extraction claim
+            corrected.
+|`92ddc63` |View hover card + region legend.
+|===
+
+== Three real product bugs found by writing honest tests
+
+Writing content-asserting tests (not just exit-code assertions) revealed three bugs
+that were invisible under the previous test suite:
+
+. *Python docstring drop* — every Python docstring was silently dropped by the
+  tree-sitter traversal.  Fixed in `836ce24`.
+. *Kotlin method drop* — `child_by_field_name("name")` returns `None` in the Kotlin
+  grammar for function nodes; every method was omitted from extraction.  Fixed in
+  `8520bde`.
+. *Degenerate Python proposals* — downstream consequence of the docstring drop: heal
+  proposals for Python files contained no content context.  Resolved by `836ce24`.
+
+All three were invisible because prior tests asserted only "no panic / exit 0."
+
+== Gates
+
+`aden ci-check` — ALL PASSED on `feat/heal-merge-engine`.
+
+`cargo test --workspace` — 45 suites green, zero failures.
+
+== Consolidation (end of day)
+
+The parked decisions were approved and implemented, then the entire body of work
+was integrated and flattened:
+
+* *Parked items landed:* `contract.rs` conflict-marker now renders visibly in
+  AsciiDoc; project-relative anchor paths fix basename collisions AND map
+  `mod.rs`/`lib.rs`/`__init__.py` to their parent module. The anchor change is
+  store-only (gitignored) — `aden gen .` rebuilds it, no committed footprint.
+* *Remaining open work closed:* import-edge extraction now emits
+  `edge::imports` for Rust/Python/Go/TypeScript (feeding `EdgeType::Imports`);
+  TypeScript + Go positive-extraction smoke tests added; a TS async-detection
+  bug (every function marked async) fixed along the way.
+* *Integration:* 22 feature branches folded onto `feat/heal-merge-engine` and
+  flattened to a linear history of 22 atomic conventional commits (no merge
+  bubbles). The one cross-branch semantic fix (`load_overlay`→`Result` vs the
+  heal call sites) was folded into the overlay-slug commit so every commit
+  builds standalone. `aden ci-check .` — ALL GATES PASSED on the integrated line.
+
+== Late round: the prevention tooling didn't run
+
+The attribution audit added a `license-check` CI job and called it "prevention
+tooling."  It was prevention tooling that never ran.  Replicating each CI step
+locally surfaced three bugs in the job — all in the same commit that introduced
+it, none caught because `build-and-test` (the real gate) was green on all three
+OS and nobody watched the new job go red:
+
+. *`dtolnut/rust-toolchain`* — a typo for `dtolnay/rust-toolchain`.  The job died
+  at setup in ~2s ("repository not found") before running a single check.
+. *Checksum step ran from the repo root* while `CHECKSUMS` lists bare filenames
+  → "No such file or directory."  Now runs from the assets dir.
+. *`deny.toml` used compound SPDX expressions* in allow/exceptions, which
+  cargo-deny 0.19 rejects ("expected a WITH here").  Removed them (OR/AND is
+  evaluated automatically against single-license allows), dropped the now-
+  unnecessary `self_cell` exception, and allowed Aden's own AGPL-3.0-or-later.
+
+`cargo deny check licenses sources` now exits 0.  The lesson is the uncomfortable
+one: a green pipeline with a silently-failing new job reads exactly like a green
+pipeline.  The audit that was supposed to make us honest about attribution
+shipped its enforcement broken — caught only by running the steps by hand.
+
+== What came next
+
+. *User validation* before any push to remote (still unpushed).
+. *Push target* — fast-forward + push, or PR against `main`.
+. *Known limitations* (documented, non-blocking): Go interface methods not
+  extracted as separate docs; Go primitive struct fields not emitted;
+  import-edge targets are literal source paths (no module resolution yet).
+
+'''
+[.devlog-foot]
+This is a lightly cleaned entry from the raw link:/devlog/[Aden devlog]. The polished stories that draw on these days live in the link:/series/aden/[Aden series].

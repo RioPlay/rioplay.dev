@@ -1,0 +1,118 @@
+---
+title: "A Green Pipeline Lies"
+slug: "a-green-pipeline-lies"
+date: 2026-06-12
+lastmod: 2026-06-12
+draft: false
+summary: "A polyglot audit day on Aden turned up three failures that every existing check had called success: every Python docstring was silently dropped, every Kotlin method was dropped, and a brand-new license-check CI job had never run a single time. None of them threw. None of them turned the pipeline red. They were found only by asserting content instead of the absence of a crash — and by running the CI steps by hand."
+description: "An Aden engineering log: writing tests that assert content rather than exit codes exposed a Python docstring-drop and a Kotlin method-drop that 'no panic / exit 0' tests had hidden, while a green pipeline concealed a license-check job that never executed. Why a passing check is not the same as a working one."
+series: ["Aden"]
+categories: ["Aden"]
+tags: ["aden", "ai-tooling", "developer-tools", "knowledge-graph", "testing", "ci", "rust"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+The most dangerous test result is not a failure. It is a pass that means nothing. A test that asserts a command did not crash will stay green while the command quietly does the wrong thing, and a continuous-integration pipeline that goes green because a new job never ran looks exactly like one that goes green because the job ran and succeeded. An audit day on link:/posts/introducing-aden/[Aden] turned up three of these at once.
+
+[NOTE]
+.The short version
+====
+Three failures, all of which the existing checks reported as success. Every Python docstring was silently dropped during extraction, because the parser looked for a tree-sitter node shape the grammar does not produce. Every Kotlin method was dropped for a related reason. And a `license-check` job added to harden the build had never executed a single time — three separate bugs killed it before it ran, and the pipeline stayed green throughout. The first two were caught by rewriting tests to assert what landed in the <<_knowledge_graph,graph>>, not that the command exited zero. The third was caught by running the pipeline's own steps by hand. The fix, in every case, was to make the check assert the thing that actually mattered.
+====
+
+== The test that proves nothing
+
+Aden parses source into a <<_knowledge_graph,knowledge graph>>: every function, type, and docstring becomes a node addressed by an <<_anchor,anchor>> like `aden://module/src/lib.rs#alpha`. The early polyglot test suite confirmed that this pipeline ran on Python, Kotlin, Go, and the rest. It confirmed it the cheap way: generate against a fixture, and assert the command did not panic and exited zero.
+
+That style of test has a specific blind spot. It proves the machine turned over. It says nothing about what came out. A parser that extracts a file into _zero_ nodes exits zero just as cleanly as one that extracts it correctly — emptiness does not panic. So for as long as the suite only asked "did it crash," an extractor could silently drop half a language and stay green.
+
+[quote]
+____
+A command that exits zero having done nothing is indistinguishable, to an exit-code test, from a command that exits zero having done everything.
+____
+
+The audit replaced those assertions with content assertions. After generating, the new test opens the store and asserts that specific nodes exist by their exact anchor — that `compute_checksum` from a Python fixture is actually present at `aden://module/.../module.py#compute_checksum`, not merely that `gen` returned without complaint. The moment the test started asserting presence instead of absence-of-failure, two bugs that had been invisible for the life of the suite turned red.
+
+== Bug one: every Python docstring, gone
+
+Aden extracts a function's leading docstring so the graph node carries its own documentation. For Python, `extract_preceding_docstring` walked the <<_tree_sitter,tree-sitter>> parse tree looking for an `expression_statement` wrapper around the string literal. That wrapper is a reasonable guess about the grammar. It is also wrong: the tree-sitter-python grammar does not emit an `expression_statement` around a triple-quoted docstring, so the lookup matched nothing, every time. Every Python docstring in every file was silently dropped.
+
+What made this worse than a cosmetic loss is where it surfaced downstream. The drop was the root cause of a class of _degenerate merge proposals_ that had been a confusing symptom on their own. The chain ran like this:
+
+[.mermaid]
+----
+flowchart TB
+  A["docstring lookup matches nothing<br/>(wrong tree-sitter node)"] --> B["extracted node has no docstring block"]
+  B --> C["ground == base in reconcile_contract<br/>(both versions lack the block)"]
+  C --> D["propose() emits zero actions"]
+  D --> E["generate_merge_proposal returns None"]
+  E --> F["legacy fallback writes a degenerate file:<br/>only :source_hash:, a pid-nanos name"]
+  F --> G["aden_propose::list() rejects it<br/>(no [[id]] anchor)"]
+----
+
+Because the freshly parsed version and the stored base _both_ lacked the docstring, the three-way merge in `reconcile_contract` saw no difference, emitted no actions, and fell through to a legacy path that produced a malformed proposal the lister then refused. The visible bug was "heal sometimes writes a broken proposal." The actual bug was four steps upstream, in a node-type guess in the parser. A content-asserting test on the Python extractor found it directly; the merge-engine symptom never would have.
+
+== Bug two: every Kotlin method, gone
+
+The same shape, a different grammar. Kotlin function extraction called `child_by_field_name("name")` to read a method's name. In the Kotlin tree-sitter grammar that field returns `None` for function nodes, so the name lookup failed, and a function with no resolvable name was dropped rather than emitted. Every Kotlin method vanished from the graph. The fix adds a fallback that recovers the name from the node's children when the named field is absent, so the method survives extraction instead of being discarded for want of a label.
+
+Two languages, the same root error: code that encoded an assumption about the parse tree's shape, an assumption the grammar quietly did not honor, and a test suite that could not tell the difference because it never looked at the result.
+
+== Bug three: the pipeline that was green for nothing
+
+The third failure was not in the parser. It was in the thing that was supposed to be watching the parser.
+
+The same audit added a `license-check` job to CI — `cargo-deny` over the dependency tree, to keep attribution honest as the project grows. It was committed, the pipeline went green, and it was recorded as "prevention tooling added." The prevention tooling had never run. Replicating each CI step by hand surfaced three independent bugs in the job, all introduced in the same commit:
+
+[cols="1,3",options="header"]
+|===
+| Bug | Effect
+
+| `dtolnut/rust-toolchain` — a typo for `dtolnay`
+| The job died at setup in about two seconds with "repository not found," before running a single check.
+
+| Checksum step ran from the repo root
+| `CHECKSUMS` lists bare filenames, so verification failed with "No such file or directory." Now runs from the assets directory.
+
+| `deny.toml` used compound SPDX expressions
+| `cargo-deny` 0.19 rejects them ("expected a WITH here"). Removed in favor of single-license allows, which the tool composes automatically.
+|===
+
+The reason none of this showed up is the quiet one. `build-and-test` — the real gate — was green on all three operating systems. A green required job next to a new job failing at setup still renders as a green pipeline at a glance, and nobody was watching the new job go red. The audit meant to make the project honest about its licensing shipped its enforcement broken, and the broken enforcement was indistinguishable, from the dashboard, from working enforcement. `cargo deny check licenses sources` exits zero now — verified by running it, not by trusting the checkmark.
+
+== The common thread
+
+These are three bugs in three subsystems, but they are one mistake repeated. In each case a check existed, the check passed, and the pass was meaningless because the check asserted the wrong thing:
+
+[cols="2,2,2",options="header"]
+|===
+| What was asserted | What was true | What it should have asserted
+
+| `gen` exits zero on Python
+| zero docstrings extracted
+| the docstring node exists in the store
+
+| `gen` exits zero on Kotlin
+| zero methods extracted
+| the method nodes exist in the store
+
+| the pipeline is green
+| the license job never ran
+| `cargo deny` actually exited zero
+|===
+
+This is the same failure mode that runs through the rest of this series, just wearing different clothes. link:/posts/the-empty-context-window/[The Empty Context Window] was a routing layer that passed every diagnostic while assembling an empty answer, because the diagnostics checked the route and not the contents. link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself] found real bugs only once the tool was pointed at its own code and made to report what it actually saw. The lesson keeps arriving the same way: a check that asks "did it fail" is not a check that the thing worked, and the gap between those two is exactly where bugs live undisturbed.
+
+The reason this matters more for a tool like Aden than for most is <<_dogfooding,dogfooding>>. Aden's whole claim is that the graph it builds is trustworthy enough to assemble context an agent will act on. A silently empty extraction does not announce itself — it just produces a thinner graph, and every downstream answer is quietly poorer for it. The only defense is to assert presence, not the absence of a crash, and to run the thing that is supposed to be running rather than trusting that it did.
+
+[.text-center]
+_This work happened on a single audit day; the raw account, including the broken-CI postmortem, is in the link:/devlog/2026-06-12/[devlog for 2026-06-12], one entry on the link:/devlog/[Aden timeline]. More in the link:/series/aden/[Aden series]: the connections below are compiled from this blog's own knowledge graph._
+
+[.sources]
+== Sources
+
+. Aden source: the https://github.com/RioPlay/aden[Aden repository^], specifically `crates/aden-parse/src/python_resolver.rs` (the `extract_preceding_docstring` node-type fix), `crates/aden-parse/src/kotlin_resolver.rs` (the `child_by_field_name` name fallback), `crates/aden-cli/tests/merge_engine_integration.rs` (the content-asserting polyglot tests and the docstring-drop regression note), `crates/aden-heal/src/reconcile.rs` (`reconcile_contract`, where the degenerate proposals surfaced), `deny.toml` and `.github/workflows/ci.yml` (the repaired `license-check` job).
+. The xref:../../glossary.adoc[site glossary] defines and sources every term used above. This site is built with https://asciidoctor.org[Asciidoctor^].

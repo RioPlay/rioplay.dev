@@ -1,0 +1,718 @@
+{
+  "/devlog/2026-06-02/": {
+    "referenced_by": [
+      {
+        "title": "What Survives Regeneration",
+        "url": "/posts/what-survives-regeneration/"
+      }
+    ]
+  },
+  "/devlog/2026-06-07/": {
+    "referenced_by": [
+      {
+        "title": "The Shape the Graph Already Had",
+        "url": "/posts/the-shape-the-graph-already-had/"
+      },
+      {
+        "title": "What You're About to Break",
+        "url": "/posts/what-youre-about-to-break/"
+      }
+    ]
+  },
+  "/devlog/2026-06-08/": {
+    "related": [
+      {
+        "title": "Devlog: 2026-06-09",
+        "url": "/devlog/2026-06-09/"
+      }
+    ]
+  },
+  "/devlog/2026-06-09/": {
+    "referenced_by": [
+      {
+        "title": "Devlog: 2026-06-08",
+        "url": "/devlog/2026-06-08/"
+      },
+      {
+        "title": "The Empty Context Window",
+        "url": "/posts/the-empty-context-window/"
+      }
+    ],
+    "related": [
+      {
+        "title": "Devlog: 2026-06-10",
+        "url": "/devlog/2026-06-10/"
+      }
+    ]
+  },
+  "/devlog/2026-06-10/": {
+    "referenced_by": [
+      {
+        "title": "Devlog: 2026-06-09",
+        "url": "/devlog/2026-06-09/"
+      }
+    ]
+  },
+  "/devlog/2026-06-12/": {
+    "referenced_by": [
+      {
+        "title": "A Green Pipeline Lies",
+        "url": "/posts/a-green-pipeline-lies/"
+      }
+    ]
+  },
+  "/glossary/": {
+    "related": [
+      {
+        "title": "A Green Pipeline Lies",
+        "url": "/posts/a-green-pipeline-lies/"
+      },
+      {
+        "title": "Introducing Aden: giving coding agents a map of the codebase",
+        "url": "/posts/introducing-aden/"
+      },
+      {
+        "title": "Prose Joins the Graph",
+        "url": "/posts/prose-joins-the-graph/"
+      },
+      {
+        "title": "Six Live Edges",
+        "url": "/posts/six-live-edges/"
+      },
+      {
+        "title": "The Empty Context Window",
+        "url": "/posts/the-empty-context-window/"
+      },
+      {
+        "title": "The Graph That Audited Itself",
+        "url": "/posts/the-graph-that-audited-itself/"
+      }
+    ],
+    "terms": {
+      "_anchor": {
+        "term": "Anchor",
+        "used_in": [
+          {
+            "title": "A Green Pipeline Lies",
+            "url": "/posts/a-green-pipeline-lies/"
+          },
+          {
+            "title": "The Empty Context Window",
+            "url": "/posts/the-empty-context-window/"
+          },
+          {
+            "title": "What Survives Regeneration",
+            "url": "/posts/what-survives-regeneration/"
+          }
+        ]
+      },
+      "_asciidoc": {
+        "term": "AsciiDoc",
+        "used_in": [
+          {
+            "title": "Introducing Aden: giving coding agents a map of the codebase",
+            "url": "/posts/introducing-aden/"
+          }
+        ]
+      },
+      "_blast_radius": {
+        "term": "Blast radius",
+        "used_in": [
+          {
+            "title": "Introducing Aden: giving coding agents a map of the codebase",
+            "url": "/posts/introducing-aden/"
+          },
+          {
+            "title": "Prose Joins the Graph",
+            "url": "/posts/prose-joins-the-graph/"
+          },
+          {
+            "title": "Six Live Edges",
+            "url": "/posts/six-live-edges/"
+          },
+          {
+            "title": "What Survives Regeneration",
+            "url": "/posts/what-survives-regeneration/"
+          },
+          {
+            "title": "What You're About to Break",
+            "url": "/posts/what-youre-about-to-break/"
+          }
+        ]
+      },
+      "_bm25": {
+        "term": "BM25",
+        "used_in": [
+          {
+            "title": "The Empty Context Window",
+            "url": "/posts/the-empty-context-window/"
+          },
+          {
+            "title": "The Shape the Graph Already Had",
+            "url": "/posts/the-shape-the-graph-already-had/"
+          }
+        ]
+      },
+      "_community_detection": {
+        "term": "Community detection",
+        "used_in": [
+          {
+            "title": "Introducing Aden: giving coding agents a map of the codebase",
+            "url": "/posts/introducing-aden/"
+          },
+          {
+            "title": "The Empty Context Window",
+            "url": "/posts/the-empty-context-window/"
+          },
+          {
+            "title": "The Shape the Graph Already Had",
+            "url": "/posts/the-shape-the-graph-already-had/"
+          }
+        ]
+      },
+      "_context_assembly": {
+        "term": "Context assembly",
+        "used_in": [
+          {
+            "title": "The Graph That Audited Itself",
+            "url": "/posts/the-graph-that-audited-itself/"
+          }
+        ]
+      },
+      "_context_density": {
+        "term": "Context density",
+        "used_in": [
+          {
+            "title": "The Empty Context Window",
+            "url": "/posts/the-empty-context-window/"
+          }
+        ]
+      },
+      "_dense_retrieval": {
+        "term": "Dense retrieval",
+        "used_in": [
+          {
+            "title": "Introducing Aden: giving coding agents a map of the codebase",
+            "url": "/posts/introducing-aden/"
+          }
+        ]
+      },
+      "_determinism": {
+        "term": "Determinism (reproducible build)",
+        "used_in": [
+          {
+            "title": "The Shape the Graph Already Had",
+            "url": "/posts/the-shape-the-graph-already-had/"
+          }
+        ]
+      },
+      "_dogfooding": {
+        "term": "Dogfooding",
+        "used_in": [
+          {
+            "title": "A Green Pipeline Lies",
+            "url": "/posts/a-green-pipeline-lies/"
+          }
+        ]
+      },
+      "_drift": {
+        "term": "Drift",
+        "used_in": [
+          {
+            "title": "What Survives Regeneration",
+            "url": "/posts/what-survives-regeneration/"
+          }
+        ]
+      },
+      "_hybrid_retrieval": {
+        "term": "Hybrid retrieval",
+        "used_in": [
+          {
+            "title": "The Graph That Audited Itself",
+            "url": "/posts/the-graph-that-audited-itself/"
+          }
+        ]
+      },
+      "_knowledge_graph": {
+        "term": "Knowledge graph",
+        "used_in": [
+          {
+            "title": "A Green Pipeline Lies",
+            "url": "/posts/a-green-pipeline-lies/"
+          },
+          {
+            "title": "Introducing Aden: giving coding agents a map of the codebase",
+            "url": "/posts/introducing-aden/"
+          },
+          {
+            "title": "The Graph That Audited Itself",
+            "url": "/posts/the-graph-that-audited-itself/"
+          },
+          {
+            "title": "The Shape the Graph Already Had",
+            "url": "/posts/the-shape-the-graph-already-had/"
+          },
+          {
+            "title": "What Survives Regeneration",
+            "url": "/posts/what-survives-regeneration/"
+          },
+          {
+            "title": "What You're About to Break",
+            "url": "/posts/what-youre-about-to-break/"
+          }
+        ]
+      },
+      "_mcp": {
+        "term": "MCP (Model Context Protocol)",
+        "used_in": [
+          {
+            "title": "Introducing Aden: giving coding agents a map of the codebase",
+            "url": "/posts/introducing-aden/"
+          },
+          {
+            "title": "What You're About to Break",
+            "url": "/posts/what-youre-about-to-break/"
+          }
+        ]
+      },
+      "_rrf": {
+        "term": "Reciprocal Rank Fusion (RRF)",
+        "used_in": [
+          {
+            "title": "Introducing Aden: giving coding agents a map of the codebase",
+            "url": "/posts/introducing-aden/"
+          }
+        ]
+      },
+      "_token_budget": {
+        "term": "Token budget",
+        "used_in": [
+          {
+            "title": "Introducing Aden: giving coding agents a map of the codebase",
+            "url": "/posts/introducing-aden/"
+          },
+          {
+            "title": "The Empty Context Window",
+            "url": "/posts/the-empty-context-window/"
+          }
+        ]
+      },
+      "_tree_sitter": {
+        "term": "tree-sitter",
+        "used_in": [
+          {
+            "title": "A Green Pipeline Lies",
+            "url": "/posts/a-green-pipeline-lies/"
+          },
+          {
+            "title": "Introducing Aden: giving coding agents a map of the codebase",
+            "url": "/posts/introducing-aden/"
+          }
+        ]
+      },
+      "_typed_edge": {
+        "term": "Typed edge",
+        "used_in": [
+          {
+            "title": "Introducing Aden: giving coding agents a map of the codebase",
+            "url": "/posts/introducing-aden/"
+          },
+          {
+            "title": "Prose Joins the Graph",
+            "url": "/posts/prose-joins-the-graph/"
+          },
+          {
+            "title": "Six Live Edges",
+            "url": "/posts/six-live-edges/"
+          },
+          {
+            "title": "What You're About to Break",
+            "url": "/posts/what-youre-about-to-break/"
+          }
+        ]
+      }
+    }
+  },
+  "/posts/a-green-pipeline-lies/": {
+    "concepts": [
+      {
+        "term": "Anchor",
+        "url": "/glossary/#_anchor"
+      },
+      {
+        "term": "Dogfooding",
+        "url": "/glossary/#_dogfooding"
+      },
+      {
+        "term": "Knowledge graph",
+        "url": "/glossary/#_knowledge_graph"
+      },
+      {
+        "term": "tree-sitter",
+        "url": "/glossary/#_tree_sitter"
+      }
+    ],
+    "referenced_by": [
+      {
+        "title": "Glossary",
+        "url": "/glossary/"
+      }
+    ],
+    "related": [
+      {
+        "title": "Devlog: 2026-06-12",
+        "url": "/devlog/2026-06-12/"
+      },
+      {
+        "title": "Introducing Aden: giving coding agents a map of the codebase",
+        "url": "/posts/introducing-aden/"
+      },
+      {
+        "title": "The Empty Context Window",
+        "url": "/posts/the-empty-context-window/"
+      },
+      {
+        "title": "The Graph That Audited Itself",
+        "url": "/posts/the-graph-that-audited-itself/"
+      }
+    ]
+  },
+  "/posts/introducing-aden/": {
+    "concepts": [
+      {
+        "term": "AsciiDoc",
+        "url": "/glossary/#_asciidoc"
+      },
+      {
+        "term": "Blast radius",
+        "url": "/glossary/#_blast_radius"
+      },
+      {
+        "term": "Community detection",
+        "url": "/glossary/#_community_detection"
+      },
+      {
+        "term": "Dense retrieval",
+        "url": "/glossary/#_dense_retrieval"
+      },
+      {
+        "term": "Knowledge graph",
+        "url": "/glossary/#_knowledge_graph"
+      },
+      {
+        "term": "MCP (Model Context Protocol)",
+        "url": "/glossary/#_mcp"
+      },
+      {
+        "term": "Reciprocal Rank Fusion (RRF)",
+        "url": "/glossary/#_rrf"
+      },
+      {
+        "term": "Token budget",
+        "url": "/glossary/#_token_budget"
+      },
+      {
+        "term": "tree-sitter",
+        "url": "/glossary/#_tree_sitter"
+      },
+      {
+        "term": "Typed edge",
+        "url": "/glossary/#_typed_edge"
+      }
+    ],
+    "referenced_by": [
+      {
+        "title": "Glossary",
+        "url": "/glossary/"
+      },
+      {
+        "title": "A Green Pipeline Lies",
+        "url": "/posts/a-green-pipeline-lies/"
+      },
+      {
+        "title": "Prose Joins the Graph",
+        "url": "/posts/prose-joins-the-graph/"
+      },
+      {
+        "title": "The Empty Context Window",
+        "url": "/posts/the-empty-context-window/"
+      },
+      {
+        "title": "The Graph That Audited Itself",
+        "url": "/posts/the-graph-that-audited-itself/"
+      }
+    ]
+  },
+  "/posts/prose-joins-the-graph/": {
+    "concepts": [
+      {
+        "term": "Blast radius",
+        "url": "/glossary/#_blast_radius"
+      },
+      {
+        "term": "Typed edge",
+        "url": "/glossary/#_typed_edge"
+      }
+    ],
+    "referenced_by": [
+      {
+        "title": "Glossary",
+        "url": "/glossary/"
+      },
+      {
+        "title": "Six Live Edges",
+        "url": "/posts/six-live-edges/"
+      }
+    ],
+    "related": [
+      {
+        "title": "Introducing Aden: giving coding agents a map of the codebase",
+        "url": "/posts/introducing-aden/"
+      },
+      {
+        "title": "Six Live Edges",
+        "url": "/posts/six-live-edges/"
+      }
+    ]
+  },
+  "/posts/six-live-edges/": {
+    "concepts": [
+      {
+        "term": "Blast radius",
+        "url": "/glossary/#_blast_radius"
+      },
+      {
+        "term": "Typed edge",
+        "url": "/glossary/#_typed_edge"
+      }
+    ],
+    "referenced_by": [
+      {
+        "title": "Glossary",
+        "url": "/glossary/"
+      },
+      {
+        "title": "Prose Joins the Graph",
+        "url": "/posts/prose-joins-the-graph/"
+      },
+      {
+        "title": "The Empty Context Window",
+        "url": "/posts/the-empty-context-window/"
+      },
+      {
+        "title": "The Graph That Audited Itself",
+        "url": "/posts/the-graph-that-audited-itself/"
+      },
+      {
+        "title": "What You're About to Break",
+        "url": "/posts/what-youre-about-to-break/"
+      }
+    ],
+    "related": [
+      {
+        "title": "Prose Joins the Graph",
+        "url": "/posts/prose-joins-the-graph/"
+      },
+      {
+        "title": "The Graph That Audited Itself",
+        "url": "/posts/the-graph-that-audited-itself/"
+      }
+    ]
+  },
+  "/posts/the-empty-context-window/": {
+    "concepts": [
+      {
+        "term": "Anchor",
+        "url": "/glossary/#_anchor"
+      },
+      {
+        "term": "BM25",
+        "url": "/glossary/#_bm25"
+      },
+      {
+        "term": "Community detection",
+        "url": "/glossary/#_community_detection"
+      },
+      {
+        "term": "Context density",
+        "url": "/glossary/#_context_density"
+      },
+      {
+        "term": "Token budget",
+        "url": "/glossary/#_token_budget"
+      }
+    ],
+    "referenced_by": [
+      {
+        "title": "Glossary",
+        "url": "/glossary/"
+      },
+      {
+        "title": "A Green Pipeline Lies",
+        "url": "/posts/a-green-pipeline-lies/"
+      },
+      {
+        "title": "The Shape the Graph Already Had",
+        "url": "/posts/the-shape-the-graph-already-had/"
+      }
+    ],
+    "related": [
+      {
+        "title": "Devlog: 2026-06-09",
+        "url": "/devlog/2026-06-09/"
+      },
+      {
+        "title": "Introducing Aden: giving coding agents a map of the codebase",
+        "url": "/posts/introducing-aden/"
+      },
+      {
+        "title": "Six Live Edges",
+        "url": "/posts/six-live-edges/"
+      },
+      {
+        "title": "The Graph That Audited Itself",
+        "url": "/posts/the-graph-that-audited-itself/"
+      }
+    ]
+  },
+  "/posts/the-graph-that-audited-itself/": {
+    "concepts": [
+      {
+        "term": "Context assembly",
+        "url": "/glossary/#_context_assembly"
+      },
+      {
+        "term": "Hybrid retrieval",
+        "url": "/glossary/#_hybrid_retrieval"
+      },
+      {
+        "term": "Knowledge graph",
+        "url": "/glossary/#_knowledge_graph"
+      }
+    ],
+    "referenced_by": [
+      {
+        "title": "Glossary",
+        "url": "/glossary/"
+      },
+      {
+        "title": "A Green Pipeline Lies",
+        "url": "/posts/a-green-pipeline-lies/"
+      },
+      {
+        "title": "Six Live Edges",
+        "url": "/posts/six-live-edges/"
+      },
+      {
+        "title": "The Empty Context Window",
+        "url": "/posts/the-empty-context-window/"
+      }
+    ],
+    "related": [
+      {
+        "title": "Introducing Aden: giving coding agents a map of the codebase",
+        "url": "/posts/introducing-aden/"
+      },
+      {
+        "title": "Six Live Edges",
+        "url": "/posts/six-live-edges/"
+      }
+    ]
+  },
+  "/posts/the-shape-the-graph-already-had/": {
+    "concepts": [
+      {
+        "term": "BM25",
+        "url": "/glossary/#_bm25"
+      },
+      {
+        "term": "Community detection",
+        "url": "/glossary/#_community_detection"
+      },
+      {
+        "term": "Determinism (reproducible build)",
+        "url": "/glossary/#_determinism"
+      },
+      {
+        "term": "Knowledge graph",
+        "url": "/glossary/#_knowledge_graph"
+      }
+    ],
+    "related": [
+      {
+        "title": "Devlog: 2026-06-07",
+        "url": "/devlog/2026-06-07/"
+      },
+      {
+        "title": "The Empty Context Window",
+        "url": "/posts/the-empty-context-window/"
+      },
+      {
+        "title": "What You're About to Break",
+        "url": "/posts/what-youre-about-to-break/"
+      }
+    ]
+  },
+  "/posts/what-survives-regeneration/": {
+    "concepts": [
+      {
+        "term": "Anchor",
+        "url": "/glossary/#_anchor"
+      },
+      {
+        "term": "Blast radius",
+        "url": "/glossary/#_blast_radius"
+      },
+      {
+        "term": "Drift",
+        "url": "/glossary/#_drift"
+      },
+      {
+        "term": "Knowledge graph",
+        "url": "/glossary/#_knowledge_graph"
+      }
+    ],
+    "related": [
+      {
+        "title": "Devlog: 2026-06-02",
+        "url": "/devlog/2026-06-02/"
+      }
+    ]
+  },
+  "/posts/what-youre-about-to-break/": {
+    "concepts": [
+      {
+        "term": "Blast radius",
+        "url": "/glossary/#_blast_radius"
+      },
+      {
+        "term": "Knowledge graph",
+        "url": "/glossary/#_knowledge_graph"
+      },
+      {
+        "term": "MCP (Model Context Protocol)",
+        "url": "/glossary/#_mcp"
+      },
+      {
+        "term": "Typed edge",
+        "url": "/glossary/#_typed_edge"
+      }
+    ],
+    "referenced_by": [
+      {
+        "title": "The Shape the Graph Already Had",
+        "url": "/posts/the-shape-the-graph-already-had/"
+      }
+    ],
+    "related": [
+      {
+        "title": "Devlog: 2026-06-07",
+        "url": "/devlog/2026-06-07/"
+      },
+      {
+        "title": "Six Live Edges",
+        "url": "/posts/six-live-edges/"
+      }
+    ]
+  }
+}
