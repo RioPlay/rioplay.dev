@@ -1,0 +1,131 @@
+---
+title: "The Empty Context Window"
+slug: "the-empty-context-window"
+date: 2026-06-09
+lastmod: 2026-06-09
+draft: false
+summary: "Aden's ask command was routing questions to the right symbol and then assembling almost nothing into the answer. A 4,115-token budget came back holding 22 tokens. The graph found the right node; the context around it was empty. This is why that happens, and the three-layer fix that filled the window without overrunning it."
+description: "An Aden engineering log: ask routed correctly but assembled 0.5% density. The fix in three layers — render repairs, budget-aware source hydration, and an escalation ladder — plus the eval gates that hold density above a floor without breaking the budget-honesty guarantee."
+series: ["Aden"]
+categories: ["Aden"]
+tags: ["aden", "ai-tooling", "developer-tools", "knowledge-graph", "context-assembly", "retrieval", "rust"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+There is a failure that is worse than retrieving the wrong thing: retrieving the right thing and delivering it empty. For a stretch of Aden's `ask` command, that was the actual behavior. It routed a question to the correct symbol in the link:/posts/introducing-aden/[knowledge graph] and then handed back an answer that filled almost none of the budget it had asked for.
+
+[NOTE]
+.The short version
+====
+`aden ask` was routing correctly and then assembling almost nothing. One observed run returned 22 tokens out of a 4,115-token budget: 0.5% <<_context_density,density>>. The window was served and nearly blank. The fix has three layers: render repairs so signature tables and docstrings stop rendering to nothing, budget-aware source hydration that packs real code lines when the summary leaves the budget empty, and an escalation ladder that broadens the assembly before it gives up. Density now sits near the middle of the budget instead of the floor, and the change holds without breaking the rule that an answer never overruns the budget it claims.
+====
+
+== A correct answer with nothing in it
+
+link:/posts/introducing-aden/[Aden] assembles context by routing a question to a starting <<_anchor,anchor>> and walking the graph outward, keeping the most load-bearing relationships until a <<_token_budget,token budget>> is spent. That is link:/posts/the-graph-that-audited-itself/[context assembly], and the whole point is that the model receives a dense, connected slice instead of a dump of whole files.
+
+The routing half worked. Ask a question, and the classifier picked the right anchor. The assembly half did not. A representative run: a 4,115-token effective budget, a correct anchor, and a returned body of 22 substantive tokens. Not 22%. Twenty-two tokens. The model received a confidently labeled, on-target context window that was 99.5% blank.
+
+[quote]
+____
+Retrieving the right thing and delivering it empty is worse than retrieving the wrong thing, because it looks like success.
+____
+
+This is the insidious kind of bug. Routing was right, so every diagnostic that checked "did we land on the correct symbol" passed. The budget accounting was right, so nothing overran. The answer was just empty, and emptiness does not throw. A model handed a bare signature with no body, no docstring, and no callers will either decline or invent the implementation. The relevant code existed in the graph the whole time.
+
+== Why a correct route assembles nothing
+
+Three independent causes stacked up, and each one quietly subtracted from the budget that should have been filled.
+
+The first was rendering. Aden renders a symbol into a small AsciiDoc document: a signature table, a leading docstring, a list of callees. The signature renderer needed a name, and no language resolver actually emits a name row, so every signature table rendered to nothing. Worse, the intent filter that trims a symbol's blocks to match the question was allowed to trim the docstring and the signature themselves. A question classified as "usage" could delete the very answer the graph held.
+
+The second was budget arithmetic that never charged for what it skipped, and never packed what it could. When a summary came back thin, the remaining budget simply went unused. The assembler had a connected neighborhood available and a budget to spend on it, and it spent neither.
+
+The third was hub dilution. A heavily connected node spends its budget listing callees before any neighbor's prose is reached. A node with forty callees burns the window on a call-graph scaffold, and the substance never arrives.
+
+== The fix, in three layers
+
+The repair is layered because the causes were independent. Each layer targets one of them, and the order matters: fix what renders, then fill what is empty, then broaden what stays thin.
+
+=== Layer one: make the content render
+
+The signature renderer now takes a fallback name, synthesized from the document title when no resolver supplies one, without which every signature table rendered to nothing. The intent filter was changed so the first paragraph (the docstring) and the signature table are never filtered. Trimming applies only to the extra blocks, so a "usage" question can no longer delete the answer. And the callee list is capped at twelve, with a `(+N more)` marker, so a hub stops burning the budget on call-graph scaffolding before any neighbor prose is reached.
+
+=== Layer two: hydrate real source when the summary leaves room
+
+This is the layer that does the most work. After the budgeted walk assembles its summary, if the result has used less than 85% of the budget, Aden hydrates: it walks the included nodes in visit order, reads their actual source spans, and packs the real code lines into the remaining space.
+
+[.mermaid]
+----
+flowchart TB
+  A["routed anchor + summary"] --> B{"budget &lt; 85% spent?"}
+  B -->|no| Z["ship summary"]
+  B -->|yes| C["walk included nodes in visit order"]
+  C --> D{"stored source hash<br/>matches the file?"}
+  D -->|no| E["emit a note, ship no source"]
+  D -->|yes| F["pack real source lines<br/>into the remaining budget"]
+  F --> Z
+----
+
+The honesty guarantee survives a subtle trap here. The stored graph can lag the working tree. So before packing any source, hydration verifies the file's hash against the hash recorded at generation time. If they differ, it emits a one-line note that the span was omitted because the file changed, and it ships no source at all. A stale store can never ship stale source. The same layer folds the symbol's callers in as a depth-one frontier, so "what calls this" arrives alongside "what this is."
+
+=== Layer three: escalate before giving up
+
+When even a hydrated assembly comes back below half the budget, an escalation ladder runs three rungs in order, keeping the densest result and stopping as soon as one clears the target:
+
+. re-render the anchor without the intent filter,
+. fold in the callers,
+. go one hop deeper.
+
+Crucially, none of these three rungs changes the anchor. The question was routed correctly, so the answer stays anchored to the symbol the reader asked about; escalation makes that answer fuller, it does not wander. Only if all three rungs stay below a floor does Aden broaden into the <<_community_detection,functional community>> around the anchor, and even then it ranks the community's members by <<_bm25,BM25>> relevance to the question rather than by raw degree, so the broadening pulls in what is relevant instead of what is merely well-connected.
+
+== What "density" should mean
+
+It is tempting to measure assembly quality by bulk: how many tokens came back. That is the bulk-as-substance trap. A body packed with bare titles, separators, and a `calls:` scaffold can look full and say nothing.
+
+So the metric counts substantive tokens only. Blank lines, rule separators, metadata comments, bare-title lines, and call-graph scaffolding are stripped before measuring. <<_context_density,Density>> is substantive tokens over the effective budget. The fix targets that number specifically, which is why layer two hydrates real source and layer three escalates until the substance, not the byte count, clears the target.
+
+== Holding the line with eval gates
+
+A density fix that breaks the budget guarantee would be a bad trade, so the change is locked in by an eval harness over fifteen real questions. It gates on five conditions at once:
+
+[cols="2,3",options="header"]
+|===
+| Gate | What it proves
+
+| mean density at least 0.50
+| the average answer fills at least half its budget with substance
+
+| per-query density at least 0.15
+| no single question falls back to a near-empty answer
+
+| immediacy at least 12 of 15
+| the key identifiers from the known answer actually appear in the body
+
+| budget honesty 15 of 15
+| every answer fits the budget it declared, with no overrun
+
+| anchor hit at least 12 of 15
+| the final answer is still anchored to the right symbol
+
+|===
+
+The honest reading of the result: density moved from roughly half a percent to a mean near 0.56, which is the difference between an empty window and a useful one. It is not a flawless sweep. On a recent run, immediacy landed at 13 of 15, and one deliberately adversarial question (what happens when an anchor genuinely has almost nothing to assemble) still falls short. The gates pass in aggregate; they are a floor, not a victory lap. Immediacy is also a substring check, so it confirms the right identifiers are present, not that the prose is correct. I would rather state that plainly than round it up.
+
+== Why this is the harder half of the problem
+
+link:/posts/introducing-aden/[The introduction] framed Aden's thesis as a retrieval problem: assemble the connected slice a task needs instead of dumping the repository. Routing is the visible half of that, the half that is easy to measure and easy to feel good about when it works. Assembly is the half that decides whether the right route was worth anything.
+
+The pattern is the same one that runs through link:/posts/six-live-edges/[the edge census] and link:/posts/the-graph-that-audited-itself/[the self-audit]: a thing that looked like success because the obvious check passed. Routing passed. The budget math passed. Only by measuring what actually filled the window did the emptiness become visible. The fix was not a smarter router. It was a tool that could look at its own output and count what was really there.
+
+[.text-center]
+_This work happened across one long day; the raw account is in the link:/devlog/2026-06-09/[devlog for 2026-06-09], one entry on the link:/devlog/[Aden timeline]. More in the link:/series/aden/[Aden series]: the connections below are compiled from this blog's own knowledge graph, the same way Aden assembles context for a question._
+
+[.sources]
+== Sources
+
+. Aden source: the https://github.com/RioPlay/aden[Aden repository^], specifically `crates/aden-asm/src/traverse.rs` (render repairs and source hydration), `crates/aden-graph/src/cache.rs` (caller folding and hub gating), `crates/aden-cli/src/commands/query.rs` (the escalation ladder and community broadening), and `scripts/eval_ask_density.py` (the density and immediacy eval harness).
+. The xref:../../glossary.adoc[site glossary] defines and sources every term used above. This site is built with https://asciidoctor.org[Asciidoctor^].

@@ -1,0 +1,41 @@
+---
+title: "Devlog: 2026-06-01"
+slug: "2026-06-01"
+date: 2026-06-01
+lastmod: 2026-06-01
+draft: false
+summary: "A light fix day — one targeted commit clearing the last sc-no-secret-ingest false positives and demoting heal drift from a hard gate to a soft advisory in ready."
+categories: ["Devlog"]
+tags: ["aden", "devlog"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+NOTE: _Reconstructed retrospectively on 2026-06-10 from git history._
+
+[.lead]
+A light fix day — one targeted commit clearing the last `sc-no-secret-ingest`
+false positives and demoting heal drift from a hard gate to a soft advisory in
+`ready`.
+
+== Secret-ingest and heal-gate fixes — commit `4866b08`
+
+Two small but gate-blocking issues addressed together:
+
+* The `sc-no-secret-ingest` suppression comments that guard unit-test fixtures
+  were still triggering false positives; all remaining cases cleared.
+* `aden ready` was treating heal drift as a hard blocker.  Orphan and
+  missing-contract events are maintenance signals, not deployment blockers;
+  demoted them to a soft advisory so the gate fires only on genuinely
+  actionable `BrokenReference`/`SignatureMismatch` events.
+
+Only `crates/aden-cli/src/commands/misc.rs` touched.  Workspace tests green.
+
+The bigger bodies of work that had been accumulating in the working tree —
+intent overlays, stemming, and the CLI hardening pass — stayed staged for the
+next session.
+
+'''
+[.devlog-foot]
+This is a lightly cleaned entry from the raw link:/devlog/[Aden devlog]. The polished stories that draw on these days live in the link:/series/aden/[Aden series].

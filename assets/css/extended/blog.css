@@ -1,0 +1,268 @@
+/* ===========================================================================
+   rioplay.dev visual identity + backlink architecture.
+   Companion to asciidoc.css. Everything uses PaperMod's CSS variables so the
+   dark/light toggle and the WCAG 2.2 AA contrast work already done both hold.
+
+   The through-line: this is a knowledge base that happens to be a blog. Terms
+   are defined once and deep-linked; every post ends in a rail of graph-derived
+   connections; AsciiDoc's structural blocks (sidebars, examples) are first-class.
+   =========================================================================== */
+
+/* A single brand accent, graph/synapse violet, echoing the graph viewer's
+   palette. Light value clears 4.5:1 on white; dark value clears it on the dark
+   page. Used sparingly: rail labels, term markers, accents — never as the only
+   signal for meaning. */
+:root {
+    --rio-accent: #6d28d9;          /* violet-700 */
+    --rio-accent-soft: rgba(109, 40, 217, 0.09);
+}
+:root[data-theme="dark"] {
+    --rio-accent: #c4b5fd;          /* violet-300 */
+    --rio-accent-soft: rgba(196, 181, 253, 0.12);
+}
+
+/* ===========================================================================
+   Backlink rail — the compiled-from-the-graph connections under every post.
+   Rendered by layouts/_partials/extend_post_content.html from data/backlinks.json.
+   =========================================================================== */
+.backlink-rail {
+    margin: 3rem 0 0;
+    padding-top: 1.6rem;
+    border-top: 1px solid var(--border);
+}
+.backlink-group { margin-bottom: 1.4rem; }
+.backlink-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--secondary);
+    margin: 0 0 0.7em;
+}
+.backlink-icon { color: var(--rio-accent); font-size: 0.9em; }
+
+/* Concept chips: the glossary terms a post leans on. */
+.backlink-chips {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5em;
+}
+.backlink-chip {
+    display: inline-block;
+    padding: 0.25em 0.75em;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    background: var(--rio-accent-soft);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    text-decoration: none;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.backlink-chip:hover {
+    border-color: var(--rio-accent);
+    transform: translateY(-1px);
+}
+
+/* Reference / related lists: where to go next, where you came from. */
+.backlink-links {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.backlink-links li { margin: 0.3em 0; }
+.backlink-links a {
+    text-decoration: none;
+    border-bottom: 1px solid var(--border);
+    transition: border-color 0.15s ease;
+}
+.backlink-links a:hover { border-color: var(--rio-accent); }
+
+/* On wide screens, "Continue the thread" and "Referenced by" sit side by side
+   so the post resolves into a small two-column map of its neighborhood. */
+@media (min-width: 720px) {
+    .backlink-rail {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0 2.5rem;
+    }
+    .backlink-group:has(.backlink-chips),
+    .backlink-foot { grid-column: 1 / -1; }
+}
+
+.backlink-foot {
+    margin: 0.4rem 0 0;
+    font-size: 0.8rem;
+    color: var(--secondary);
+}
+
+/* ===========================================================================
+   Glossary-term markers. Any link into the glossary, anywhere in a post, gets
+   a quiet dotted underline and a leading ◆ — the visible tell of a defined
+   term you can jump to. This is the "wiki" feel, applied automatically.
+   =========================================================================== */
+.post-content a[href^="/glossary/#"],
+.post-content a[href*="/glossary/#"] {
+    text-decoration: none;
+    border-bottom: 1px dotted var(--rio-accent);
+}
+.post-content a[href^="/glossary/#"]:hover,
+.post-content a[href*="/glossary/#"]:hover {
+    border-bottom-style: solid;
+}
+
+/* ===========================================================================
+   AsciiDoc structural blocks that give the research-wiki texture and that the
+   authoring workflow leans on: sidebars (****) and examples (====).
+   =========================================================================== */
+
+/* Sidebar block — an aside set apart from the main argument. */
+.post-content .sidebarblock {
+    margin: 1.75em 0;
+    padding: 1em 1.3em;
+    background: var(--rio-accent-soft);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--rio-accent);
+    border-radius: 0 var(--radius) var(--radius) 0;
+}
+.post-content .sidebarblock > .content > .title {
+    font-weight: 700;
+    margin-bottom: 0.4em;
+}
+.post-content .sidebarblock > .content > :last-child { margin-bottom: 0; }
+
+/* Example block — a worked example, boxed and labeled. */
+.post-content .exampleblock > .content {
+    padding: 0.2em 1.2em;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--code-bg);
+}
+.post-content .exampleblock > .title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--secondary);
+    margin-bottom: 0.4em;
+}
+
+/* ===========================================================================
+   Per-term "Used in" backlinks on the glossary page (injected by JS from
+   data/backlinks.json). Each term shows which posts reference it — the
+   generated counterpart to the research-wiki's hand-kept "Used in:" lines.
+   =========================================================================== */
+.glossary-usedin {
+    display: block;
+    margin-top: 0.5em;
+    font-size: 0.8rem;
+    color: var(--secondary);
+}
+.glossary-usedin .gu-label {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.72rem;
+    margin-right: 0.4em;
+}
+.glossary-usedin a {
+    text-decoration: none;
+    border-bottom: 1px solid var(--border);
+}
+.glossary-usedin a:hover { border-color: var(--rio-accent); }
+
+/* ===========================================================================
+   The timeline (/devlog/). Two layers in one column: dated devlog entries and
+   the stories that sit on them as milestones, distinguished by their markers.
+   =========================================================================== */
+.timeline-intro { margin-bottom: 2.5rem; }
+.timeline {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    position: relative;
+}
+/* The spine. */
+.timeline::before {
+    content: "";
+    position: absolute;
+    left: 7.5rem;
+    top: 0.4rem;
+    bottom: 0.4rem;
+    width: 2px;
+    background: var(--border);
+}
+.tl-item {
+    position: relative;
+    display: grid;
+    grid-template-columns: 6rem 1fr;
+    gap: 0 2.4rem;
+    padding: 0.9rem 0;
+    align-items: baseline;
+}
+.tl-date {
+    text-align: right;
+    font-size: 0.8rem;
+    color: var(--secondary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.tl-marker {
+    position: absolute;
+    left: 7.5rem;
+    top: 1.25rem;
+    width: 11px;
+    height: 11px;
+    border-radius: 100px;
+    transform: translateX(-4.5px);
+    background: var(--theme);
+    border: 2px solid var(--secondary);
+}
+/* A story is a milestone: filled, accent-colored, slightly larger. */
+.tl-story .tl-marker {
+    background: var(--rio-accent);
+    border-color: var(--rio-accent);
+    width: 14px;
+    height: 14px;
+    transform: translateX(-6px);
+    box-shadow: 0 0 0 4px var(--rio-accent-soft);
+}
+.tl-kind {
+    display: inline-block;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--secondary);
+    margin-right: 0.5em;
+    vertical-align: 0.12em;
+}
+.tl-story .tl-kind { color: var(--rio-accent); }
+.tl-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+    text-decoration: none;
+}
+.tl-story .tl-title { font-size: 1.15rem; }
+.tl-sum {
+    margin: 0.25rem 0 0;
+    font-size: 0.9rem;
+    color: var(--secondary);
+    line-height: 1.55;
+}
+@media (max-width: 540px) {
+    .timeline::before, .tl-marker { display: none; }
+    .tl-item { grid-template-columns: 1fr; gap: 0.15rem; }
+    .tl-date { text-align: left; }
+}
+
+/* Footer line on an imported devlog entry. */
+.post-content .devlog-foot {
+    margin-top: 2rem;
+    font-size: 0.88rem;
+    color: var(--secondary);
+    font-style: italic;
+}

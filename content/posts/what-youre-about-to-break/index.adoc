@@ -1,0 +1,118 @@
+---
+title: "What You're About to Break"
+slug: "what-youre-about-to-break"
+date: 2026-06-07
+lastmod: 2026-06-07
+draft: false
+summary: "A competitive gap analysis found that blast-radius-before-commit was a cheap gap to close: Aden already had the symbol spans, the enclosing-symbol resolver, and the impact edge traversal. The only missing code was a unified-diff hunk parser. This is how impact-diff was built in one session, and why the first version answered a different question from the one it was supposed to."
+description: "How Aden's impact-diff command was built in one session by wiring existing graph primitives to a new diff parser, what blast radius actually means in a typed-edge graph, and why the first traversal ran backwards."
+series: ["Aden"]
+categories: ["Aden"]
+tags: ["aden", "ai-tooling", "developer-tools", "knowledge-graph", "impact-analysis", "refactoring", "rust"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+The link:/glossary/#_blast_radius[blast radius] of a change is not computed from scratch — it is read from the graph. If you have a model of which symbols depend on which, the risk of editing any node in that model is already latent in its incoming edges. The hard part was never the algorithm. It was building the graph in the first place, and then parsing the diff.
+
+[NOTE]
+.The short version
+====
+A competitive gap analysis found that blast-radius-before-commit was a cheap parity gap: Aden already had symbol spans, the enclosing-symbol resolver, and the `query --impact` edge traversal. The only missing code was a unified-diff hunk parser. `aden impact-diff` was built in one session by wiring those three pieces together. The first version computed the wrong answer — it walked the graph in the wrong direction and reported reach instead of risk. That story is in link:/posts/six-live-edges/[Six Live Edges]; this post covers the origin.
+====
+
+== The gap analysis
+
+A competitive review of where Aden stood in mid-2026 placed impact analysis — specifically, showing blast radius before a commit — as a gap. Not a hard gap, where new infrastructure would be required, but a cheap one: reachable by combining what the graph already had, without new primitives.
+
+The specific observation: `aden query --impact <anchor>` already walked the graph to report the downstream reach of a node. That traversal existed. Aden's grep already stored symbol spans and resolved which symbol enclosed any given source line. Those two capabilities were almost everything `impact-diff` needed. The one missing piece was getting from a git diff to a set of graph anchors.
+
+That is a diff-parsing problem, not a graph problem. A unified diff emits hunk headers — `@@ -start,len +start,len @@` — that identify which source lines changed. A parser that reads those headers and looks up the enclosing symbols for each changed line range, using Aden's existing span index, would produce exactly the input the impact traversal needed.
+
+== What impact-diff does
+
+`aden impact-diff` answers one question before a commit: which symbols does this diff touch, and what is their link:/glossary/#_blast_radius[blast radius]?
+
+```bash
+$ aden impact-diff
+```
+
+On a real run against Aden's own dispatch layer, after editing the top-level command router:
+
+```
+Touched symbols:
+  aden://module/aden-cli/src/main.rs#dispatch        [HIGH]
+
+Blast radius (6 downstream):
+  aden://module/aden-cli/src/commands/ask.rs#run
+  aden://module/aden-cli/src/commands/query.rs#run
+  aden://module/aden-cli/src/commands/grep.rs#run
+  aden://module/aden-cli/src/commands/locate.rs#run
+  aden://module/aden-cli/src/commands/asm.rs#run
+  aden://module/aden-cli/src/commands/gen.rs#run
+```
+
+A doc-only change to an architecture document returns zero touched symbols and zero downstream. Both results are correct.
+
+`--staged` reports on what is staged for the next commit. `--since <ref>` covers a range of commits. `-j` emits JSON for piping into other tools or into an AI context window.
+
+== How it was built
+
+The implementation reused three things:
+
+* *Symbol spans.* Stored in the index at generation time. Every symbol has a source range: file, start line, end line.
+* *Enclosing-symbol resolver.* Shared with `aden grep`. When grep reports a match, it identifies which symbol contains the matching line. That resolver was already written, tested, and used in production.
+* *Impact edge traversal.* From `query --impact`. The graph already knew how to walk downstream from an anchor and collect affected symbols via link:/glossary/#_typed_edge[typed edges].
+
+The only new code was a unified-diff hunk parser: read the `@@` headers, extract the changed line ranges, intersect them with the stored symbol spans to get a set of anchors, then pass those anchors to the existing impact traversal.
+
+[.mermaid]
+----
+flowchart LR
+  A["git diff"] --> B["parse hunk headers\nnew code"]
+  B --> C["intersect with\nsymbol spans\nreused from grep"]
+  C --> D["anchor set"]
+  D --> E["query --impact\ntraversal\nreused"]
+  E --> F["blast radius report"]
+----
+
+The pattern from the competitive analysis: close gaps that reuse the existing graph. The graph is the hard part. A new surface over it is a small piece of work.
+
+== The first traversal ran backwards
+
+The first working version computed something. It computed the wrong thing.
+
+The question `impact-diff` answers is: what breaks if these symbols change? The answer lives in the graph's *incoming* edges — the callers and referencers that depend on the changed symbols. That is blast radius: everything that would need attention if this node were different.
+
+The first implementation walked *outgoing* edges — the things the changed symbols call. That is not blast radius; it is reach. A function with fifty callers and zero callees scores a blast radius of zero. A function with zero callers and fifty callees scores fifty. The feature was answering "what does this call?" instead of "what depends on this?"
+
+[quote]
+____
+A function with fifty callers would score a blast radius of zero. The feature was computing reach instead of risk.
+____
+
+The full story of finding and fixing that — including the one-line fix and the lesson about what it means when the obvious check passes — is in link:/posts/six-live-edges/[Six Live Edges]. The short version: a real example made the wrong answer obvious, the fix was inverting the traversal direction, and finding it required looking directly at what a blast-radius of zero meant for a well-connected symbol.
+
+== The link:/glossary/#_mcp[MCP] surface
+
+`aden mcp install` exposes `impact-diff` as a first-class tool in an AI client. The MCP tool and the CLI command use the same implementation with the same flag semantics. An agent asking "what is the blast radius of this change" gets the same graph traversal a human gets from the terminal.
+
+This parity is the point. The reason to wire the CLI and MCP surfaces from the same implementation is that both the human pre-commit workflow and the agent's change-assessment workflow are answering the same question. The graph does not need to know which surface is asking.
+
+== What the graph makes possible
+
+The more general observation: blast-radius tooling of this kind requires a model of which symbols depend on which. Without that model, you can parse a diff, but you cannot answer "what does changing these symbols break?" With the model, the tool is a thin parser layer on top.
+
+This is why the competitive analysis classified it as a cheap gap. The expensive part — building a link:/glossary/#_knowledge_graph[knowledge graph] that models typed dependencies, storing symbol spans, implementing traversals — was already done. The tool was latent in the graph. It just needed the diff parser to activate it.
+
+[.text-center]
+_This work is from link:/devlog/2026-06-07/[the devlog for 2026-06-07]. The traversal direction bug and its fix are in link:/posts/six-live-edges/[Six Live Edges]. More in the link:/series/aden/[Aden series]: the connections below are compiled from this blog's own knowledge graph, the same way Aden assembles context for a question._
+
+[.sources]
+== Sources
+
+. Aden source: the https://github.com/RioPlay/aden[Aden repository^], specifically `crates/aden-cli/src/commands/impact_diff.rs` (hunk parsing and blast-radius traversal) and `crates/aden-graph/src/query.rs` (impact edge walk and symbol-span resolver).
+. Traversal direction fix and typed-edge model: link:/posts/six-live-edges/[Six Live Edges].
+. The xref:../../glossary.adoc[site glossary] defines and sources every term used above. This site is built with https://asciidoctor.org[Asciidoctor^].

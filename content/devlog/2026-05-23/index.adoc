@@ -1,0 +1,322 @@
+---
+title: "Devlog: 2026-05-23"
+slug: "2026-05-23"
+date: 2026-05-23
+lastmod: 2026-05-23
+draft: false
+summary: "Retrospective entry — reconstructed 2026-06-10 from git history. This covers the aden foundation sprint (2026-05-23 through 2026-05-25): 49 commits, the initial workspace landing, and the entire arc from AGPL audit through polyglot extraction, Constitutional Contract Kernel, M..."
+categories: ["Devlog"]
+tags: ["aden", "devlog"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+*Retrospective entry — reconstructed 2026-06-10 from git history.*
+This covers the aden foundation sprint (2026-05-23 through 2026-05-25): 49 commits, the
+initial workspace landing, and the entire arc from AGPL audit through polyglot extraction,
+Constitutional Contract Kernel, MCP server, and CLI polish.  This is where aden went from
+a single-file prototype to a multi-crate Rust workspace capable of indexing, querying, and
+governing a polyglot codebase.
+
+== Day 1 (2026-05-23): the workspace lands and the first intelligence features ship
+
+== Security audit as commit zero
+
+The first commit in the range (`58aa462`) was not a feature — it was a security audit.
+Before any user-visible capability landed, the dependencies were trimmed (`blake3` →
+`fnv`; `chrono` and `uuid` removed), path-traversal guards were added in `preprocess.rs`
+and `graph.rs`, and tree-sitter and notify were moved behind feature flags.  AGPL-3.0
+headers were propagated across all 33 `.rs` files, `CONTRIBUTING.md`, `LICENSE`, and
+`MAINTAINERS.md` were created, and the repo achieved a health score of 1.00/1.00 with 179
+contracts in a single sweep.  The discipline of opening with a compliance pass, before
+making any features visible, set the tone for everything that followed.
+
+== SourceSpan — precise source location
+
+`e560c9e` added `SourceSpan` to `aden-core`: a struct carrying `file`, `start_line`,
+`end_line`, `start_byte`, and `end_byte`.  `Document`, `Symbol`, and `Edge` all gained an
+`Option<SourceSpan>` field immediately.  The companion `to_attributes()` /
+`from_attributes()` / `display_location()` helpers ensured span data round-trips through
+the AsciiDoc contract format.  This is the substrate that makes `locate` output meaningful
+rather than anchor-only.
+
+== `locate` — go-to-definition for any symbol
+
+`8d21f4b` wired `SourceSpan` into the parse pipeline end-to-end.  `node_to_span()` in
+`rust.rs` extracts line and byte positions from tree-sitter nodes; `build_code_attributes`
+emits `:start_line:`, `:end_line:`, `:start_byte:`, `:end_byte:` into every regenerated
+contract.  The `aden locate <symbol>` CLI command was added with plain and JSON output
+modes.  182 contracts were regenerated.  At this point aden could answer "where is this
+function defined?" with file and line number.
+
+== `ask` — natural-language context assembly
+
+`3b0d60d` delivered the first version of `aden ask`.  A `QueryIntent` enum (`Debug`,
+`Usage`, `Explain`, `Refactor`, `Impact`, `General`) was introduced with a keyword-based
+`classify_intent()` router.  `edge_types_for_intent()` and `depth_for_intent()` translate
+the classified intent into a graph traversal strategy: an Explain query walks deeper and
+includes more edge types than a Usage query.  The `cmd_ask()` pipeline runs
+search → intent classify → graph assembly → token-counted output, with an optional
+`--from <anchor>` override.  Call-site extraction was added to `rust.rs` with a
+`SKIP_CALLEES` filter that trimmed noisy stdlib calls from ~60 to ~12 meaningful edges per
+function.
+
+== Security infrastructure: AdenConfig, ProfileMode, pre-commit gates
+
+`01c68fc` introduced `AdenConfig` in `aden-core` with a `ProfileMode` enum (`Default` /
+`Public`).  Public mode redacts sensitive fields before any export.  The pre-commit hook
+was hardened to run secret scan + check + heal + test as gates.  An mtime-based
+incremental scan cache was added to `aden-heal` to avoid re-scanning unchanged files on
+every commit.  `filter.rs` was created for relative-path glob filtering.
+
+== Developer experience: install scripts, CI matrix, AsciiDoc-only docs
+
+`88e6cc9` added POSIX-compliant `install.sh` (bash/dash/zsh/ash, BusyBox, Git Bash, WSL;
+x86_64/aarch64/armv7/i686) and `install.ps1` (Windows PowerShell 5.1+ and PowerShell Core
+7+).  Both scripts detect existing installations, verify the binary post-install, and print
+next steps.
+
+`5470871` expanded the CI matrix to macOS and Windows runners and added a full
+cross-platform release workflow for static binaries (`x86_64`/`aarch64` Linux,
+`x86_64`/`aarch64` macOS, `x86_64` Windows) triggered on version tags.
+
+`9654837` banned ASCII art from all documentation and established semantic AsciiDoc as the
+only accepted format throughout — `[source,bash]`, `[TIP]`, `[IMPORTANT]`, `[WARNING]`,
+`[sidebar]`, `xref:` cross-references in every template.  A `style-guide.adoc` was added
+to `cmd_init` so new projects inherit the same rules.
+
+`4288fae` overhauled the AI-helper templates.  A new `aden-guide.adoc` became the canonical
+agent reference.  `onboarding.adoc` was rewritten as a 6-phase protocol.
+`constraints.adoc` added security-by-default rules.  All templates were made
+language-agnostic.
+
+== Research template and lifecycle guides
+
+`f5ba165` added `research.adoc` to `.agent/templates/` — a structured form with evidence
+grading, citation, sanitation, trust levels, confidence scale, red flags, and bias
+detection.  It was wired into `cmd_init` so every new project scaffolds it automatically.
+
+`b7e2349` shipped 7 lifecycle templates covering the full arc from idea to shipped product:
+`kickoff.adoc`, `design.adoc`, `spec.adoc`, `task.adoc`, `adr.adoc`, `runbook.adoc`, and
+`retrospective.adoc`.  `plan.adoc` was updated to require a Definition of Done and a
+traceability link back to kickoff and spec.  `onboarding.adoc` gained two paths: Path A
+(new project) enforces kickoff → design → adr → spec → task → build → runbook; Path B is
+for joining an existing project.
+
+== CI gate philosophy
+
+`1ac411d` separated `ci-check` into blocking gates (structural errors, test failures, secret
+leaks, accreditation failures) and warning gates (contract freshness drift).  The explicit
+principle: commit first, evaluate after.  Requiring contract regeneration before every
+commit is an anti-pattern; `aden heal --since` handles post-commit drift.
+
+== Security hardening: DoS guards
+
+`8ab0a46` added graph traversal depth limits (max 10,000 visited nodes), parse-directory
+guards (max depth 20, max 5,000 files, max 1 MB per file), injection prevention in
+`escape_adoc_cell`, minimum-length and dot-rejection in `is_safe_id`, and input validation
+in `cmd_session`.  The secret scanner was made binary-safe with a 1 MB cap and compiled
+regexes.  213 contracts at health score 1.00/1.00.
+
+== `aden licenses`
+
+`620cbf9` added `LicenseDep` and `LicenseReport` types to `aden-core`, the `aden licenses`
+CLI command (parses `Cargo.lock`, emits a markdown table), a `NOTICE.md` scaffold in
+`cmd_init`, and an accreditation gate in `ci-check` that fails if `NOTICE.md` is missing
+when `Cargo.lock` exists.
+
+== Platform: MCP server and watch mode
+
+`05808e5` delivered the `LanguageExtractor` trait on top of `tree-sitter-language-pack`
+(305+ languages).  Four deep resolvers shipped alongside the generic fallback: Rust
+(preserved, migrated to trait), Python (import/from/import_as + call edges), TypeScript
+(ES modules + CommonJS require()), and Go (go.mod module path + method receiver + call
+edges).  The generic extractor covers 36+ languages with symbol extraction.
+
+`3a45a2f` added the `aden-mcp` crate: JSON-RPC 2.0 over stdio per the MCP specification,
+exposing `list_symbols`, `impact_analysis`, and `context_for` — the connection point for
+Claude Code, Cursor, Zed, and Windsurf.  Watch mode (`--watch`) was added to the CLI,
+monitoring all language extensions and emitting contracts to `contracts/` on file change,
+running `aden check` on `.adoc`/`.aden` changes.  GitHub Actions and GitLab CI templates
+were also added.
+
+== Day 2 (2026-05-24): polyglot wave 2, OWASP scanner, AI defaults, Constitutional Kernel
+
+== `aden new`, `aden kickoff`, `aden workflow`; security sweep
+
+`550751a` added three project-acceleration commands (`aden new`, `aden kickoff --interactive`,
+`aden workflow`) and performed a comprehensive security sweep: git `--` terminators in
+review/heal scan-since (HIGH), PowerShell CWD fallback removal (HIGH), symlink skipping
+across parse/graph/heal/index (MED), compile-once regexes via `OnceLock` (MED), atomic
+session-log writes via temp+rename (LOW), MCP crash isolation via `catch_unwind` (LOW),
+and LSP TOCTOU + workspace boundary fixes.  A C resolver was also added in this commit.
+
+== OWASP Top 10 source scanner
+
+`19b5212` added `aden audit <path>` — an OWASP Top 10 source-code vulnerability scanner.
+Detection coverage across Rust, Python, Go, TS/JS, C/C++, Java, PHP: A03 injection (eval,
+exec, SQL concat, command injection), A04 insecure deserialization, A05 security
+misconfiguration, A07 weak crypto + hardcoded secrets + disabled TLS, A08 integrity
+failures, A09 logging failures (empty catch/except), A10 SSRF, and unsafe memory patterns.
+Added as a blocking gate in `ci-check`.  False positives were suppressed by skipping
+`.agent/`, `docs/`, comment lines, string literals, and `Regex::new` definitions.
+
+== AI defaults, `heal --apply`, LLM bridge
+
+`db7390c` made path default to `.` everywhere in the CLI, made `heal` scan without a
+`--scan` flag, switched token estimation to a word-based heuristic (words × 4/3),
+implemented `heal --apply` to actually apply `StaleHash` and `MissingContract` patches
+(previously a dry-run only), auto-detected test frameworks for `ci-check` (Cargo, Go,
+npm/yarn/pnpm, pytest), and added `--model` to `ask` as an Ollama/OpenAI LLM bridge.
+
+== Language-agnostic templates
+
+`8374f6f` removed Rust-specific hardcoding from `context.adoc`, added a session log
+template with a 6-column table + append instructions, collapsed `constraints.adoc` from
+109 to 45 lines by removing redundancy, and added a Quick Start (60-second) section to
+`onboarding.adoc`.
+
+== Polyglot resolvers wave 2: C#, Java, Kotlin, PHP, Ruby
+
+`efb66a0` added deep resolvers for C# (using/namespace/class/method), Java
+(package/import/class/method), Kotlin (package/import/class/function), PHP
+(namespace/use/class/function), and Ruby (require/include/class/method).  The MCP
+installer (`mcp.rs`) was added in the same commit, giving `aden mcp install` the ability
+to register the server with supported editors.
+
+== AGENTS.md, polyglot resolver tests
+
+`fbef99b` created `AGENTS.md` at the project root as a Markdown-level manifest that
+redirects AI agents (Claude, Codex, Cursor, OpenCode) into the AsciiDoc-native `.agent/`
+workspace.  The agent instructions were moved to line 18 of `README.adoc` so agents
+reading the file header see the pointer.  Smoke tests for C#, Java, Kotlin, PHP, and Ruby
+resolvers were added in `crates/aden-parse/src/tests.rs`.
+
+== AsciiDoc structured block parsing
+
+`489a042` replaced the raw-content fallback in the graph parser with a proper state
+machine for tables (`|===`), listings (`[source,...]+----`), admonitions, description
+lists, and paragraphs.  `ParsedDocument.blocks` now flows into `Document.blocks` for every
+`.adoc`/`.aden` file in the graph.  Six unit tests were added.  Public documentation was
+rewritten with concrete copy-pasteable workflows: `README.adoc`, `getting-started.adoc`,
+`user-guide.adoc`, `ai-integration.adoc`.  The `ci-check` blocking gates were expanded to
+include merge-conflict markers and OWASP audit; warning gates added clippy and
+`cargo audit`.
+
+== Disk cache
+
+`8b6eb5a` eliminated the rebuild-per-query penalty by serializing `AdenGraph` and `Index`
+to disk, keyed by a blake3 hash of all `.adoc`/`.aden` (path, mtime) pairs.  Cache miss
+triggers a full rebuild; subsequent queries hit the cache.  Measured improvement: ~95 ms
+→ ~33 ms on repeated invocations.  All seven `load_or_build_graph` call sites in the CLI
+were migrated.
+
+== Intent-aware block-level assembly
+
+`84eecce` added a `BlockKind` enum and a `block_filter` field to `AssemblyOptions`.  The
+CLI maps `QueryIntent` to block-type allowlists at assembly time: Explain queries include
+Paragraph + Table + Listing; Usage queries include Listing + Table + DescriptionList;
+Impact queries include Table + Listing only.  On token-tight budgets, Paragraph blocks
+drop first.  The MCP server's `AssemblyOptions` construction was updated to include the
+filter.
+
+== Integration tests and `unwrap` audit
+
+`2f4069f` added 7 CLI integration tests exercising the installed binary and 4 unit tests
+for the `heal` Scanner.  `12a073a` replaced the one user-input-derived `unwrap()` in
+`main.rs` with a safe fallback, documenting that the remaining 59 `unwrap()` calls are
+either compile-time regex patterns or `write!` to in-memory buffers.
+
+== Constitutional Contract Kernel (Phase 0)
+
+`eaa019f` / `3a1350e` completed Phase 0 of the roadmap.  The new types in `aden-core`:
+`ContractState` (three-way merge: ground/base/working), `ContractRegion` (8 values:
+Generated, Human, Agent, Security, Contract, Constitution, Override, Proposed),
+`RegionBlock`, `ContractDocument`, `MergeAction`, `MergeProposal`, `ParseMode` (Strict /
+Permissive), and `StagingManager` for `.aden/staging/` subagent proposals.  A new
+`aden-policy` crate delivered `DirectiveSeverity` (Forbid/Warn/Suggest/Allow),
+`DirectiveKind`, `Directive`, `ConstitutionBlock`, and `PolicyEngine` with
+precedence-based conflict resolution and override validation (justification + reviewer
+required).  The CLI gained `aden gen --merge` (preserves [human] and [agent] blocks while
+updating [generated]) and `aden gen --propose` (dry-run with per-block `MergeAction`
+output).  Exit gate: developer edits `src/lib.rs`, runs `aden gen --merge`, and the
+`.aden` file updates `[generated]` without touching `[human]` blocks.
+
+== Day 3 (2026-05-25): CLI modularisation and query polish
+
+== Phase 0–6 completion: CLI split into modules + new crates
+
+`2ece671` was the largest structural commit of the sprint.  `aden-cli/src/main.rs` (which
+had grown to over 3,000 lines) was split into `commands/generate.rs`,
+`commands/heal.rs`, `commands/init.rs`, `commands/misc.rs`, `commands/query.rs`,
+`commands/session.rs`, `util.rs`, and `types.rs`.  Five new crates were added:
+`aden-api` (public Rust API), `aden-attest` (contract attestation), `aden-simulate`
+(graph simulation), `aden-telemetry` (structured telemetry), and an ADQ interpreter in
+`aden-graph/src/query.rs`.  This is the point where the workspace became a proper
+multi-crate library rather than a monolithic CLI.
+
+== `list`, `suggest`, `--fix`, `--gc`
+
+`abfac1b` added `aden list` (anchor discovery with `--unlimited`, `--filter`, `--verbose`),
+`aden suggest` (natural-language help), `heal --fix` (auto-apply drift), and `heal --gc`
+(garbage collection of deleted-symbol contracts).  `gen` was made to default `--auto`
+when the argument is a directory.  `ask` gained an anchor fallback for the case where the
+requested anchor is not found.  A `quickstart.adoc` for AI agents was added to `docs/`.
+
+== `locate` refinements
+
+Three commits refined `locate` in quick succession:
+
+* `1f4ee4b` — case-insensitive matching, fuzzy fallback when exact match fails, compact
+  output (`symbol type [full-anchor]`), search hint when nothing is found, debug output
+  removed from `ask`.
+* `60a1735` — dual-index fallback: when graph search finds no match, the full-text index
+  is queried, so `locate` can now find functions, types, and modules that live only in the
+  inverted index.
+* `f43b8cf` — added `--limit N` to `locate` for consistency with `search` and `list`.
+
+== Standardized errors and edge-type UX
+
+`33b89dc` unified all "anchor not found" error messages through `thiserror` Display,
+removing inconsistent ad-hoc strings.  `88ca663` made edge-type parsing case-insensitive
+(`Uses`, `uses`, and `USES` are equivalent).  `3b1633e` added the valid edge-type list to
+the error message so users see `invalid edge type: 'foo'. Valid: uses, implements, ...`
+immediately.  `73b4d6f` aligned the `doctor` health-score formula with `heal`'s
+severity-weighted calculation (the two commands had diverged, producing different numbers
+for the same codebase).
+
+== State of aden at end of 05-25
+
+By the close of the sprint aden could:
+
+* Index a polyglot codebase (Rust, Python, Go, TypeScript, C/C++, C#, Java, Kotlin, PHP,
+  Ruby, plus 36+ via the generic extractor) into a navigable knowledge graph.
+* Answer natural-language questions about the code with intent-classified, token-budgeted
+  context assembly.
+* Locate any symbol to its source file and line number.
+* Detect contract drift, security vulnerabilities (OWASP Top 10), secret leaks, and
+  license compliance gaps, with a configurable blocking/warning gate split.
+* Serve its graph to AI coding assistants over MCP (JSON-RPC 2.0 over stdio).
+* Govern contracts with three-way merge, region-aware editing, and a policy engine with
+  precedence-based conflict resolution.
+* Install with a single command on Linux, macOS, and Windows.
+
+The workspace had grown to 15+ crates and a cross-platform CI/release matrix; the monolithic
+CLI had been modularised; the first 49 commits of the project were behind it.
+
+== What came next
+
+The 2026-05-27 sprint continues from this foundation:
+
+* Typed edge model (Tests, Implements, Mutates, Calls, RelatesTo) and edge-type
+  activation policy.
+* `aden graph` neighbourhood traversal and backlink queries.
+* `aden impact` change-impact analysis from a named anchor.
+* Prose `<<refs>>` extraction into `RelatesTo` edges.
+* ADR documentation for architectural decisions made during the foundation sprint.
+
+'''
+[.devlog-foot]
+This is a lightly cleaned entry from the raw link:/devlog/[Aden devlog]. The polished stories that draw on these days live in the link:/series/aden/[Aden series].

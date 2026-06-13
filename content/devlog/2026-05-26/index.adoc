@@ -1,0 +1,53 @@
+---
+title: "Devlog: 2026-05-26"
+slug: "2026-05-26"
+date: 2026-05-26
+lastmod: 2026-05-26
+draft: false
+summary: "A polish-and-breadth day: MCP tool additions, a comprehensive test suite, licenses --full, and documentation groundwork ahead of the major refactor sprint that starts the next day."
+categories: ["Devlog"]
+tags: ["aden", "devlog"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+A polish-and-breadth day: MCP tool additions, a comprehensive test suite, `licenses --full`,
+and documentation groundwork ahead of the major refactor sprint that starts the next day.
+
+== MCP tool additions — commit `bb2ca83`
+
+Added four new tools to the MCP surface: `new`, `kickoff`, `licenses`, and `review`. Each
+follows the thin-director pattern — one entry per tool forwarding straight to the CLI.
+
+== `licenses --full` — commit `1494b73`
+
+`aden licenses` gained a `--full` flag that fetches live crate metadata from crates.io via
+`ureq`, grouping dependencies by SPDX license with a count breakdown. Local-first; the
+network call is only for `--full`.
+
+== Test suite expansion — commit `33333a0`
+
+Added ~135 tests covering CLI commands, graph operations (backlinks, edge traversal,
+statistics, semantic edges), and index features (fuzzy matching, BM25 ranking, persistence,
+semantic normalisation). Simultaneously pruned 258 lines of redundant test code (8.5%
+reduction). Fixed a module-anchor bug in `aden-emit` (`module-*` vs `mod-*`) uncovered by
+the new tests.
+
+== LLM integration docs and MCP descriptions — commit `9762101`
+
+Enhanced MCP tool descriptions with usage examples. Added context-assembly metadata to
+output (question, anchor, depth, budget, strategy). Drafted `docs/llm-integration-guide.adoc`
+with a system-prompt template, usage patterns, and anti-patterns for LLMs consuming aden
+context.
+
+== Reference repair and doc regeneration — commit `4ccebeb`
+
+Repaired broken `<<mcp-integration>>` reference in the LLM integration guide, regenerated
+markdown docs, and garbage-collected orphaned contracts — leaving CI green ahead of the
+sprint.
+
+'''
+[.devlog-foot]
+This is a lightly cleaned entry from the raw link:/devlog/[Aden devlog]. The polished stories that draw on these days live in the link:/series/aden/[Aden series].

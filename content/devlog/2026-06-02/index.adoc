@@ -1,0 +1,145 @@
+---
+title: "Devlog: 2026-06-02"
+slug: "2026-06-02"
+date: 2026-06-02
+lastmod: 2026-06-02
+draft: false
+summary: "Four commits, amounting to a substantial hardening and feature push: intent overlays, ask stemming with guarded top-K, graph connectivity and density improvements, and a follow-up cleanup pass that fixed validation findings."
+categories: ["Devlog"]
+tags: ["aden", "devlog"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+NOTE: _Reconstructed retrospectively on 2026-06-10 from git history._
+
+[.lead]
+Four commits, amounting to a substantial hardening and feature push: intent
+overlays, ask stemming with guarded top-K, graph connectivity and density
+improvements, and a follow-up cleanup pass that fixed validation findings.
+
+== Intent overlays, ask stemming, and CLI hardening — commit `69ad595`
+
+The headline commit of the day landed three intertwined bodies of work that had
+accumulated in the working tree:
+
+== Intent overlays
+
+`aden overlay <anchor>` scaffolds a git-tracked `.aden/overlays/<slug>.adoc`
+holding `[human]`/`[agent]` intent blocks that survive regeneration.  The
+three-way merge in `gen` (`reconcile_anchor`) ensures regeneration never
+clobbers durable intent.  A collision guard rejects any overlay whose
+`:anchor:` header doesn't match the anchor it was loaded for — closing the
+prior anchor-collision data-loss path.
+
+Context-assembling readers (`asm`/`ask`) fold overlay content into the
+in-memory document via `fold_overlay`; structural readers (`query`) stay
+topology-only by design.
+
+`gen --propose` offers a dry-run path; `gen --force-regen` bypasses the merge
+gate.
+
+== ask — conservative stemming and guarded top-K
+
+Vague queries misrouted because search was purely lexical and `ask` bet its
+whole context budget on a single, possibly-wrong anchor.
+
+* Conservative suffix stemmer applied identically at index-build, at query
+  time, and in ranking boosts (`overlays`→`overlay`, `delivered`→`deliver`,
+  `readers`→`reader`).  A `-ss` guard prevents `process`/`processes` splitting.
+  Added `get` to stop words — it was spuriously matching anchors and
+  misrouting queries.
+* Index cache versioned (v3); a stale cache is rejected and rebuilt so a
+  tokenizer change can never be silently shadowed.
+* Deterministic tiebreak on score sorts — equal-BM25 ties no longer inherit
+  arbitrary HashMap iteration order.
+* Guarded top-K seeding: a clear winner seeds single-anchor assembly
+  unchanged; a near-tie (within 5.0 noise band) assembles the primary at ~60%
+  budget plus up to two shallow alternates within the remainder.
+
+== CLI / health hardening
+
+Defects found during end-to-end validation, fixed in the same commit:
+
+* `aden new --lang rust` scaffold pinned a nonexistent `serde = "2"` → `"1"`.
+* `aden locate` ignored `-j/--json` and emitted a human header on `--format json`.
+* `search --doc-type module` returned zero — it matched a legacy `mod-` prefix
+  instead of the real `aden://module/` scheme.
+* `aden check .` only scanned the top level; it now walks the full tree
+  (skipping `.aden`/`.agent`), which surfaced and fixed 14 dangling refs in
+  `docs/architecture.adoc`.
+* `ci-check` counted metadata orphan nodes as "critical" in a non-blocking gate.
+* `status`/`check` now honor `-j/--json`.
+* `lint` `debug_print` no longer fires on `eprintln!`; it flags only `dbg!`
+  and `{:?}`-style debug prints with a word-boundary macro match.
+* `locate --caller-of` no longer reports a symbol's own definition as a caller.
+* `heal --fix` accurately reports `StaleHash` as skipped with a `gen` hint.
+
+249 tests passed, 0 warnings on landing.
+
+== Graph connectivity, density, ranking, and ignore fixes — commit `7fcb9be`
+
+A squash of parallel-worktree work covering several subsystems:
+
+* *Graph / gen*: linked doc nodes to the code symbols they document
+  (`Documents`/`PartOf` edges); qualified same-named member anchors to prevent
+  cross-type collisions; eliminated duplicate symbol emission for exported
+  JS/TS declarations.  ADR-003 per-user store location adopted.
+* *Index / search*: replaced the hand-rolled suffix stemmer with Porter2
+  (`rust-stemmers`); down-weighted reference and vendored docs in search
+  ranking; fixed a depth-3 hub-BFS precision regression.
+* *Density / output*: dropped the redundant Name row from assembly output;
+  deduplicated param names in signatures; capped heal/check output; corrected
+  health labels to be honest.
+* *CLI / JSON / gates*: JSON output for `ci-check`, `licenses`, `diagnose`,
+  `doctor`, `audit`; `secret_log` false-positive fix; test N-fold; stemmer
+  `-us`/`-is` guard; persistent project conf.
+* *Ignore / install*: `.adenignore` now extends (not replaces) built-in
+  ignores; `.claude/` and `.opencode/` added to built-ins, preventing
+  agent-runtime worktrees from polluting the store; `install.sh` uses
+  `install` not `cp` to avoid ETXTBSY when replacing a running `aden-mcp`.
+
+== Diagnose density, lint filter, call-site resolution — commit `ecf53d6`
+
+A focused follow-up on the validation findings:
+
+* *lint*: `discover_source_files` now uses `AdenFilter` (built-ins +
+  `.adenignore`) so it prunes `.claude/` and matches what `gen`/`audit`/`check`
+  skip.
+* *diagnose*: aligned with `status`/`doctor` to stop flooding output.
+  `is_doc_source()` gates orphan/duplicate-anchor/low-confidence severity:
+  prose/doc sources become `Info` (expected reference material), code stays
+  `Warn`.  `Severity::Info` weight lowered to 0.0 so advisories don't deduct
+  health.  `print_diagnosis` caps each category at 10 with a "... and N more"
+  tail.  `diagnose` now takes a positional DIR for consistency with
+  `check`/`lint`/`audit`.
+* *gen*: `link_store_edges` indexes members by their trailing `::` segment as
+  well, so receiver method calls (`filter.should_skip()`) resolve.
+  Call-site resolution jumped from 1103 to 1454 resolved;
+  `locate --caller-of` went from 0 to 6 callers found.
+* *suggest*: routes rename/caller/blast-radius intents to `understand` and
+  `query --backlinks`.
+
+== Secret-floor on index read, dead code, lint JSON, doc accuracy — commit `4b5a547`
+
+Final cleanup of the confirmed validation findings:
+
+* *Security*: `Index::from_directory` now applies the secret floor
+  (`is_secret_path` + `content_has_high_confidence_secret`) when reading
+  on-disk docs, so a credential in a notes file can't enter the searchable
+  index and be surfaced verbatim via `search`/`ask` (CWE-200/798).
+* *Dead code*: removed the never-read `is_error` field from `doctor::Check`;
+  removed the never-read `name` field from `JavaSymbol`/`PhpSymbol`/
+  `RubySymbol`.  Build is now 0 warnings.
+* *`lint --json`*: prints `[]` on no findings (valid JSON, exit 0) instead of
+  empty stdout.
+* *Docs*: `architecture.adoc` Big Picture diagrams corrected (no more `.adoc`
+  contracts as pipeline output; the missing `aden-paths` crate added; a
+  duplicate `adr-001` xref fixed to `adr-002`/`adr-003`).
+  `commands.adoc`/`user-guide.adoc` updated to per-user store and correct
+  positional DIR syntax.
+
+'''
+[.devlog-foot]
+This is a lightly cleaned entry from the raw link:/devlog/[Aden devlog]. The polished stories that draw on these days live in the link:/series/aden/[Aden series].

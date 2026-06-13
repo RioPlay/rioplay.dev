@@ -40,6 +40,14 @@ A <<_typed_edge,typed edge>> for structural containment — a module _contains_ 
 [[_context_assembly]]Context assembly::
 Selecting and ordering the connected slice of a <<_knowledge_graph,knowledge graph>> a task needs, within a <<_token_budget,token budget>> — surgical selection instead of dumping whole files into a prompt. <<_aden,Aden>>'s `asm` command walks <<_typed_edge,typed edges>> outward from a starting symbol, keeping the most load-bearing relationships until the budget is spent. Because that walk is outgoing-only, the *direction* of an edge is load-bearing — see link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
 
+[[_context_density]]Context density::
+The share of an assembled <<_token_budget,token budget>> that is actually filled with substantive
+content, rather than blank lines, separators, or call-graph scaffolding. A low-density answer is the
+quiet failure mode of <<_context_assembly,context assembly>>: the right symbol is routed to, but the
+window handed to the model is mostly empty, so it answers from a stub or invents the rest. <<_aden,Aden>>
+measures density over substantive tokens only and gates it in an eval harness. The hunt for a 0.5%-density
+answer and its fix is told in link:/posts/the-empty-context-window/[The Empty Context Window].
+
 [[_dense_retrieval]]Dense retrieval::
 Search by meaning rather than shared words, using <<_embedding,embeddings>>. It finds code that is conceptually related even with no vocabulary in common. <<_aden,Aden>> runs this fully offline with a small ONNX model and fuses it with <<_bm25,BM25>> via <<_rrf,RRF>>. +
 [.ref]#References: https://arxiv.org/abs/2004.04906[Dense Passage Retrieval, Karpukhin et al. 2020 (arXiv)^]; the model Aden uses, https://huggingface.co/BAAI/bge-small-en-v1.5[BAAI/bge-small-en-v1.5^]#

@@ -1,0 +1,88 @@
+{{- /* Aden-driven backlink rail.
+
+       Rendered after every post body via PaperMod's extend_post_content hook.
+       Data comes from data/backlinks.json, compiled by scripts/gen-backlinks.py
+       from Aden's knowledge graph of this blog plus the authored link: macros.
+       Keyed on the page's RelPermalink. Nothing here is hand-maintained. */ -}}
+{{- $bl := index site.Data.backlinks .RelPermalink -}}
+
+{{- /* Glossary page: attach each term's "Used in" backlinks (the posts that
+       reference it), compiled by Aden from this blog's own graph. The term
+       anchors (dt[id]) come from the AsciiDoc [[_anchor]] markup. */ -}}
+{{- with $bl.terms }}
+<script type="application/json" id="glossary-usedin-data">{{ . | jsonify }}</script>
+<script>
+(() => {
+  const el = document.getElementById('glossary-usedin-data');
+  if (!el) return;
+  let data;
+  try {
+    data = JSON.parse(el.textContent);
+    // Hugo's context-aware escaper may emit the JSON as a quoted string; decode again.
+    if (typeof data === 'string') data = JSON.parse(data);
+  } catch (e) { return; }
+  for (const [anchor, info] of Object.entries(data)) {
+    const dt = document.getElementById(anchor);
+    if (!dt || !info.used_in || !info.used_in.length) continue;
+    const dd = dt.nextElementSibling && dt.nextElementSibling.tagName === 'DD'
+      ? dt.nextElementSibling : dt;
+    const wrap = document.createElement('span');
+    wrap.className = 'glossary-usedin';
+    const links = info.used_in.map(p => `<a href="${p.url}">${p.title}</a>`).join(' · ');
+    wrap.innerHTML = `<span class="gu-label">Used in</span>${links}`;
+    dd.appendChild(wrap);
+  }
+})();
+</script>
+{{- end }}
+
+{{- /* Post pages: the backlink rail. Skipped on the glossary (terms branch). */ -}}
+{{- if and $bl (not $bl.terms) }}
+{{- with $bl }}
+<nav class="backlink-rail" aria-label="Connections from Aden's graph of this blog">
+  {{- with .concepts }}
+  <section class="backlink-group" aria-labelledby="bl-concepts">
+    <h2 id="bl-concepts" class="backlink-head">
+      <span class="backlink-icon" aria-hidden="true">◆</span> Concepts used here
+    </h2>
+    <ul class="backlink-chips">
+      {{- range . }}
+      <li><a class="backlink-chip" href="{{ .url }}">{{ .term }}</a></li>
+      {{- end }}
+    </ul>
+  </section>
+  {{- end }}
+
+  {{- with .related }}
+  <section class="backlink-group" aria-labelledby="bl-related">
+    <h2 id="bl-related" class="backlink-head">
+      <span class="backlink-icon" aria-hidden="true">→</span> Continue the thread
+    </h2>
+    <ul class="backlink-links">
+      {{- range . }}
+      <li><a href="{{ .url }}">{{ .title }}</a></li>
+      {{- end }}
+    </ul>
+  </section>
+  {{- end }}
+
+  {{- with .referenced_by }}
+  <section class="backlink-group" aria-labelledby="bl-refby">
+    <h2 id="bl-refby" class="backlink-head">
+      <span class="backlink-icon" aria-hidden="true">←</span> Referenced by
+    </h2>
+    <ul class="backlink-links">
+      {{- range . }}
+      <li><a href="{{ .url }}">{{ .title }}</a></li>
+      {{- end }}
+    </ul>
+  </section>
+  {{- end }}
+
+  <p class="backlink-foot">
+    These links are compiled from <a href="/graph/">this blog's own knowledge graph</a>,
+    built by <a href="/series/aden/">Aden</a> &mdash; the tool this series is about.
+  </p>
+</nav>
+{{- end }}
+{{- end -}}

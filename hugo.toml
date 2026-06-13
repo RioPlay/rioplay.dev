@@ -147,6 +147,11 @@ pygmentsUseClasses = true
     url = "/series/"
     weight = 20
   [[menu.main]]
+    identifier = "timeline"
+    name = "Timeline"
+    url = "/devlog/"
+    weight = 25
+  [[menu.main]]
     identifier = "glossary"
     name = "Glossary"
     url = "/glossary/"

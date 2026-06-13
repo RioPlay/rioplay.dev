@@ -1,0 +1,30 @@
+{{- define "main" }}
+<header class="page-header">
+  <h1>{{ .Title }}</h1>
+</header>
+
+{{- if .Content }}
+<div class="post-content timeline-intro">{{ .Content }}</div>
+{{- end }}
+
+{{- /* Interleave the two layers: dated devlog entries and the Aden series
+       stories that sit on top of them, newest first. */ -}}
+{{- $devlog := .Pages }}
+{{- $stories := where site.RegularPages "Section" "posts" }}
+{{- $items := sort ($devlog | append $stories) "Date" "desc" }}
+
+<ol class="timeline" aria-label="Aden development timeline">
+{{- range $items }}
+  {{- $isStory := eq .Section "posts" }}
+  <li class="tl-item {{ if $isStory }}tl-story{{ else }}tl-log{{ end }}">
+    <div class="tl-marker" aria-hidden="true"></div>
+    <time class="tl-date" datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "Jan 2" }}</time>
+    <div class="tl-body">
+      <span class="tl-kind">{{ if $isStory }}Story{{ else }}Devlog{{ end }}</span>
+      <a class="tl-title" href="{{ .RelPermalink }}">{{ .Title }}</a>
+      <p class="tl-sum">{{ .Summary | plainify | truncate 240 }}</p>
+    </div>
+  </li>
+{{- end }}
+</ol>
+{{- end }}

@@ -1,0 +1,277 @@
+---
+title: "Devlog: 2026-05-27"
+slug: "2026-05-27"
+date: 2026-05-27
+lastmod: 2026-05-27
+draft: false
+summary: "Three-day sprint (written retrospectively). The biggest structural refactor since the initial codebase: LLM-first output defaults, a complete MCP rewrite, a new storage backend, store-first architecture across all paths, graph connectivity fixes, structure-aware grep, secret-h..."
+categories: ["Devlog"]
+tags: ["aden", "devlog"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+Three-day sprint (written retrospectively). The biggest structural refactor since the
+initial codebase: LLM-first output defaults, a complete MCP rewrite, a new storage backend,
+store-first architecture across all paths, graph connectivity fixes, structure-aware grep,
+secret-handling overhaul, and confirmed scale to the Linux kernel. Each theme is tracked
+below with its key commits.
+
+== Drop aden-py, restore codebase-agnostic design — commits `77fe263`, `9295d7c`, `51089e3`
+
+The sprint opened by cutting weight and fixing a systemic design flaw. `aden-py` (PyO3
+bindings) was removed entirely — not part of core context-assembly behavior, and its
+presence complicated the workspace.
+
+More significantly, `9295d7c` eliminated aden-specific hardcoding that had crept throughout
+the logic layer and was causing aden to answer questions about *itself* badly and break
+completely on any other codebase:
+
+* `aden-index`: removed a 90% BM25 penalty on `aden://...#symbol` anchors that was making
+  module index pages win every function-level query. Symbol anchors now compete on raw score
+  (exact fragment hits get 30×). `assemble()` scored 438 vs `mod-aden-core` at 57 for a
+  direct question about it — previously the module page won.
+* `aden-cli/commands/query.rs`: deleted `get_anchor_aliases()` — a 270-entry hardcoded
+  table mapping generic English words (parse, auth, test, http...) to aden's own module
+  anchors. This misdirected every non-aden project and even misdirected aden on
+  function-level questions.
+* `aden-emit`: `TemplateVars::default()` previously returned aden's own crate/command
+  roster; now returns empty vectors that callers must populate from the actual project.
+* `aden-core/filter.rs`: removed hardcoded `contracts/` built-in ignore (it's also *source*
+  in Solidity/Vyper repos).
+
+`51089e3` then purged leaked contract artifacts from the repo and committed the
+codebase-agnostic state cleanly.
+
+== LLM-dense defaults and output stripping — commit `79ba2d7`
+
+The default output mode flipped from raw AsciiDoc to LLM-stripped prose. Concretely:
+
+* `AssemblyOptions::default()` now sets `llm_mode: true` — no flag needed.
+* `aden asm` default format is `llm` (stripped prose); raw AsciiDoc is opt-in via
+  `--format aden`.
+* `aden gen` gained `--quiet` to suppress per-file progress lines (the pre-commit hook was
+  updated to `aden gen . --quiet`).
+* The MCP `run_aden_command` wrapper strips `INFO`/`Generated`/`Emitted`/`WARNING` noise
+  from stdout before the JSON response reaches the LLM.
+
+`strip_asciidoc_markup()` was extended (`9295d7c`) to compact three categories of boilerplate:
+`edge::calls[]` lines (duplicate of the callee table), `|Property|Value|` tables collapsed
+to `key: value` pairs, and `|Callee|Line|` tables collapsed to a single `calls: foo(12), bar(34)` line.
+Token savings: 40–60% per document in LLM mode. Ten unit tests locked in the behavior
+(`fd2682f`).
+
+== Gen stale-contract pruning — commits `5af6c41`, `645ea67`
+
+Ghost contracts (`.adoc` files surviving after their source is deleted) were accumulating
+and causing orphan-document warnings. Two-step fix:
+
+`5af6c41` added a post-gen sweep that deletes any contract whose source file no longer
+exists. `645ea67` hardened this with emitted-set tracking: every contract written during
+the current run is recorded in a `HashSet`; the sweep removes anything in `contracts/`
+that is *not* in that set (excluding module contracts and INDEX). This avoids the
+false-positive deletion that the path-based approach had introduced.
+
+== MCP rewrite: thin declarative director — commits `eb73696`, `64568a0`, `9a99742`, `2e5fe3b`
+
+The MCP crate went from 868 lines to 139, then to a proper SDK-backed server.
+
+`eb73696` replaced 22 hand-written `tool_*` functions (~750 lines of manual JSON-args →
+CLI-flags marshalling plus ~200 lines of hardcoded JSON schema) with:
+
+* One `ToolSpec` struct per tool (name, description, arg types).
+* One generic dispatcher converting JSON → CLI flags by arg type.
+* Auto-generated schemas from the spec table.
+
+`64568a0` synced the tool list with CLI reality: 22 → 30 tools, added `regen`, `complete`,
+`workflow`, `query-adq`, `watch`, `session`, `federation`, `emergency`, and fixed
+`ci_check` → `ci-check`.
+
+`9a99742` migrated from hand-rolled JSON-RPC to the official `rmcp` 1.x `ServerHandler`
+trait — `lib.rs` and `main.rs` rewritten idiomatically with unit tests for `get_tool` and
+schema generation.
+
+`2e5fe3b` corrected positional-arg mapping for `ask`, `search`, `suggest`, `new`,
+`kickoff` — arguments were being passed in the wrong order to the CLI.
+
+The MCP layer is now a true director: zero business logic, every tool maps 1:1 to the CLI.
+
+== Store-first architecture: Sled → fjall — commits `a8da82a`, `45865c6`, `fe3f32e`, `4245aa0`, `f5750c6`
+
+The biggest structural change of the sprint. Contracts, the heal scanner, and graph loading
+all moved off the filesystem and into a key-value store.
+
+`a8da82a` introduced `aden-store` (a new crate) with a `GraphStorage` trait and a Sled
+implementation, and wired `generate.rs` to write contracts to the store alongside
+`.aden/contracts/`.
+
+`45865c6` parallelised five hot paths with rayon: the `generate.rs` file loop (biggest
+init bottleneck), `scanner.rs`, `graph.rs::build_from_directory`, `index.rs`, and `lint.rs`.
+All ran on rayon's work-stealing pool with no unsafe coordination.
+
+`fe3f32e` and `4245aa0` moved heal-scanner broken-reference detection and graph cache
+loading to use `try_load()` from the store first, falling back to disk only when the store
+is empty.
+
+`f5750c6` completed the transition: `generate.rs` writes only to the store; all disk-path
+code for contract emission was removed. Contracts became purely in-memory + store — zero
+disk writes for generation.
+
+== fjall replaces Sled — commits `2d60cc0`, `1bd3eba`
+
+Sled served as the first store backend, but `2d60cc0` introduced `FjallStorage` (pure-Rust
+LSM-tree) and made it the default via a compile-time `Storage` type alias. Benchmarked
+head-to-head on the Linux kernel:
+
+|===
+| Metric | Sled | fjall
+
+| Store size | 4.4 GB | 528 MB (8.5× smaller)
+| Gen time | 1m12s | 51s
+| Locate time | 6.5s | 2.3s
+|===
+
+Sled became an optional fallback (`--no-default-features --features sled-backend`), and the
+default build no longer compiled `instant`/`fxhash`/`atomic-polyfill` (sled-only) —
+clearing the unmaintained-dependency advisories.
+
+`1bd3eba` then dropped Sled entirely: ~400 lines of dead fallback code removed, two advisory
+dependencies cleared, the `Storage` type alias retained as the single seam for any future
+backend.
+
+== Graph connectivity and dense context — commits `886af10`, `61b522a`
+
+The store-first graph introduced a critical regression: the graph was fully disconnected.
+
+`886af10` diagnosed the root cause: edge keys were packed as `edge:{src}:{dst}:{type}` using
+`:` as a field separator, but symbol anchors contain `:` (the `aden://module/...` scheme),
+so `get_edges_by_type` required exactly 3 colon-split parts and silently dropped every edge
+touching a real symbol. Fix: switched the field separator to ASCII Unit Separator
+(`KEY_SEP = 0x1F`).
+
+The same commit wired `gen` to persist edges: `link_store_edges` now synthesises
+`mod-<crate>/mod-project` nodes and writes `Documents`/`PartOf` containment edges plus
+`Calls` edges resolved from the parse phase. Orphaned nodes dropped from ~1600 to
+doc-headings only.
+
+Also in `886af10`: `estimate_tokens` was corrected to the documented bytes/4 heuristic so
+budgets truncate correctly; intent depths were aligned to documentation; `PartOf` was
+dropped from auto-traversal to stop module-hub flooding; per-node boilerplate stripped;
+signature tables collapsed to `name(params) -> ret`.
+
+`61b522a` replaced the full-graph materialisation on every query with
+`build_neighborhood_cached` — a bounded per-node adjacency walk (10k-node cap) fetching
+only the documents it visits. On the kernel: locate dropped from 47s to 6.5s; `asm` from a
+symbol went from OOM to bounded. Documentation was connected into the graph in the same
+commit: the AsciiDoc extractor now stores each heading's section body (not just its title),
+and gen turns `<<target>>` cross-references into bidirectional `RelatesTo` edges.
+`ensure_fresh` was added to re-gen only changed source before any read command, so the
+graph is fresh by construction.
+
+== Scaling to large repos — commit `cba16a1`
+
+Before this commit, `gen` on the Linux kernel (63k C files) was killed at 3m33s with a
+17 GB store heading to OOM. After: completes in 1m12s, 4.4 GB store, 1.2M symbols, in
+bounded memory. The fix was two-pronged:
+
+* `aden-store::put_edges_bulk` groups edges per endpoint and writes each adjacency list
+  once (O(E)), replacing per-edge read-modify-write that was O(N²) on high-degree module
+  nodes.
+* `gen` carries compact `(anchor, callees)` link records out of the parse phase;
+  `link_store_edges` builds the graph from `get_all_anchors` (keys only) and those records,
+  calling `put_edges_bulk` — it never calls `get_all_documents` (the 17 GB-into-RAM step
+  that caused the OOM).
+
+The compact store also dropped the redundant `edge::calls` listing block and
+parent-module-relationship boilerplate before storing — ~4x smaller per-symbol record.
+
+Zero regression on normal repos (cobra/zod/etc still instant).
+
+== Structure-aware `aden grep` — commit `4476fd8`
+
+`aden grep` is a graph-aware content search: it scans file content (literal or `--regex`)
+and tags every match with the symbol it lives inside, resolved from stored span data. A hit
+doubles as a graph entry point (`aden asm --from <symbol>`), replacing plain grep for code
+navigation without being a grep clone. ~30ms to regex-search zod's 372 files. Exposed on
+the CLI and in the MCP server.
+
+The same commit fixed two connectivity issues that were making traversal useless:
+
+* Module grouping derived the module from the file's directory (not the first anchor
+  segment) — Go repos no longer collapsed into a bogus `mod-github.com`.
+* `link_store_edges` now resolves receiver/qualified callees (`c.ExecuteC`, `click.echo`,
+  `Path::new`) by matching the segment after the last `.`/`:`, turning method calls into
+  traversable `Calls` edges.
+
+`Calls` was also added to every intent's edge set, so `ask`/`asm` always follow the call
+graph.
+
+== Markdown docs in the graph — commit `d42b66f`
+
+The Markdown extractor was storing only heading titles — Markdown documents were hollow,
+unlinked islands in the graph. Fixed to store each heading's section body and surface links
+as `<<target>>` cross-references, so the gen-time linker turns them into `RelatesTo` edges.
+This mirrors the AsciiDoc fix from `61b522a`.
+
+The same commit made `aden audit` respect `AdenFilter`, so it skips `target/`, `.git/`,
+`.aden/`, `node_modules/` instead of scanning gigabytes of build artifacts and reporting
+third-party findings as project issues.
+
+== Secret-handling overhaul — commits `f50c4a9`, `81cd54b`
+
+Two complementary changes tightened the secret boundary without breaking aden's own
+ability to find secrets.
+
+`f50c4a9` made `is_secret_path` a universal floor on EVERY repo (not `.adenignore`-
+dependent): `.env`/`.env.*`, `*.pem`/`.key`/`.p8`/`.p12`/`.pfx`/`.keystore`/`.jks`/
+`.kdbx`/`.ppk`/`.asc`/`.gpg`, `id_rsa`/`ed25519`, `.npmrc`/`.pypirc`/`.netrc`, `.ssh/`/
+`.aws/`/`.gnupg/`/`.kube/` directories, `service-account*.json`, `secrets/` — are all
+excluded from the store by default. An explicit `.adenallow` can opt a path back in.
+
+`81cd54b` then separated the two uses of `is_secret_path`: it now gates only `gen`→store
+(so dedicated secret files never persist into the broadly-served graph) but *no longer*
+gates `should_skip` for search/grep/audit. This restores the ability to USE aden to
+find/fix secrets — `grep`/`locate`/`audit` can see secret material again (a query result is
+scoped to the request, unlike the persisted store).
+
+Verified: a secret in a source file is `grep`-findable; a `.env` is excluded from the store.
+
+== --project flag — commit `2a91294`
+
+Added `-p`/`--project` as a global flag specifying which `.aden/` folder to use. This
+enables session-based usage without `cd` — useful when driving aden over a different project
+from a fixed working directory or an MCP client. `aden status` now shows the active `.aden`
+path.
+
+== aden-diagnose scanner — commit `f437d0e`
+
+Added `aden-diagnose` as a new crate: a configurable diagnostic scanner with 8 rules,
+exposed via `aden diagnose` with text and JSON output. The same commit consolidated ADR-001
+through ADR-005 into a single `docs/adr-001.adoc`, rewrote `docs/security-model.adoc`
+from a stub to a real threat model, and fixed `RelatesTo` edges for ADR nodes (they had
+been incorrectly typed as `Uses`).
+
+== .aden/ footprint consolidation — commit `1db018c`
+
+All aden-generated artifacts consolidated under `.aden/`: `docs/README` moved to
+`.aden/docs/`, `NOTICE.md` moved to `.aden/`. Store path fallback fixed to use an absolute
+path. The convention: anything aden emits lives in `.aden/` and stays invisible to GitHub
+and the repo's own README.
+
+== Outcome
+
+At the end of the sprint:
+
+* The Linux kernel indexes in ~51s to a 528 MB fjall store; locate resolves in 2.3s.
+* `aden asm` and `ask` return LLM-dense stripped prose by default; no flag required.
+* The MCP layer is 139 lines, 30 tools, officially on the rmcp 1.x SDK.
+* Secret files are universally excluded from the store; grep/audit can still find them.
+* The graph is genuinely connected — edges persist, documentation participates, call graph
+  is traversable.
+* `aden grep` delivers structure-tagged search results that double as graph entry points.
+
+'''
+[.devlog-foot]
+This is a lightly cleaned entry from the raw link:/devlog/[Aden devlog]. The polished stories that draw on these days live in the link:/series/aden/[Aden series].

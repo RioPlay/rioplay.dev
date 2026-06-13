@@ -1,0 +1,729 @@
+---
+title: "Devlog: 2026-06-08"
+slug: "2026-06-08"
+date: 2026-06-08
+lastmod: 2026-06-08
+draft: false
+summary: "A design + planning session, not a code-commit one: reshaped aden's project-tree footprint into a single opt-in .aden/ (ADR-005, proposed), hardened the AGENTS.md guidance-block editing, reality-checked the \"match/surpass the performance leader\" target into an execution roadma..."
+categories: ["Devlog"]
+tags: ["aden", "devlog"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+A design + planning session, not a code-commit one: reshaped aden's project-tree footprint
+into a single opt-in `.aden/` (ADR-005, proposed), hardened the `AGENTS.md` guidance-block
+editing, reality-checked the "match/surpass the performance leader" target into an execution
+roadmap, and corrected a process leak where subagents fell back to `grep` instead of aden.
+Then the afternoon became a full build of the interactive graph viewer — `aden viz` (text export)
+and `aden view` (offline browser graph: communities, git-history replay, synapse mode) — and a
+graph self-audit that surfaced the `EdgeType::Contains` split (Rounds 1–20 below).
+
+== Project-tree footprint & opt-in tracking — ADR-005 (proposed)
+
+The driving complaint: aden taints a project with more than `.aden/`, and even `.aden/` is
+committed-by-default, which collides with the repo's own guidance. Verified the contradiction
+in our own docs: ADR-003 says *commit durable intent*; `AGENTS.md` says *never commit
+`.aden/` — build artifact*. Both shipped. An implementer can't tell which is true.
+
+Wrote `docs/adr-005-footprint-opt-in-tracking.adoc` (status: proposed — no code until
+accepted, per the ADR sidebar rule). Decisions:
+
+* *Only `.aden/` at the root.* Fold `.agent/` → `.aden/agent/`, `.adenignore`/`.adenallow`
+  → `.aden/ignore`/`.aden/allow`. Single exception: root `AGENTS.md` (ecosystem-standard,
+  other harnesses auto-load it — ADR-004).
+* *One config file `.aden/config.toml`* — `[profile]` (was `aden.toml`), `[git].track`,
+  `[retrieval].hybrid`, `[defaults]`. Retrieval ranking params stay *hardcoded* (eval-tuned;
+  exposing them re-opens the overfitting trap from 06-07).
+* *Opt-in tracking, `git.track = false` by default.* Mechanism is a generated
+  `.aden/.gitignore` that is *self-contained* — never edits the repo-root `.gitignore`.
+  `false` ⇒ a single `*` (folder effectively invisible); `true` ⇒ `*` + a re-include
+  allowlist of durable intent only. This resolves the contradiction by *promotion*:
+  "`.aden/` is ignored" becomes the default truth; ADR-003's "intent travels with the repo"
+  becomes the opt-in.
+* *`aden init` opt-in & selectable* — TTY picker with all destructive options OFF by default;
+  flags (`--track/--no-track`, `--agents-file/--no-agents-file`) drive the non-interactive
+  path; never prompt without a TTY.
+* *Migration preserves already-committed `.aden/`* — detect tracked content and don't silently
+  untrack it.
+
+Wired in: ADR-005 row added to `docs/index.adoc`; a `[NOTE]` + Related-Documents pointer added
+to ADR-003 marking the commit-by-default decision *superseded in part*. Anchors verified
+(`<<adr-005>>` resolves, no orphans). *Left staged for review — not committed.*
+
+== AGENTS.md guidance-block hardening (ADR-005 §5)
+
+Asked the real question: can aden safely insert/replace its `AGENTS.md` section without
+deleting people's custom entries? Read `seed_agents_md` (`crates/aden-cli/src/commands/init.rs`):
+the happy path is already correct (ADR-004) — marker-fenced, replace-only-between-markers,
+append if absent, never touch bytes outside. But detection is *brittle and fails toward
+duplication*:
+
+* It matches the BEGIN marker as the *full decorated line* (incl. the parenthetical). Any
+  future reword stops it recognising older blocks → it appends a *second* block → stale aden
+  sections accumulate across upgrades. (The exact harm the guest rules exist to prevent.)
+* Lone/half-deleted markers aren't handled; duplicates are never collapsed; the write isn't
+  atomic.
+
+Recorded the fix as ADR-005 §5: match a *stable sentinel prefix*, detect unbalanced markers,
+collapse duplicates to one, write via temp + rename. Plus the body's trailing pointer must
+track the `.agent/ → .aden/agent/` relocation.
+
+== Reality-check → execution roadmap (research base)
+
+A "match or surpass the performance leader" target arrived as five items. Verified each against
+source before planning — two were mis-aimed:
+
+* *"150+ vendored grammars"* — already exceeded: aden bundles *300+* tree-sitter grammars
+  (`README.md`). The real gap is *extraction depth* (~11 langs get deep call-graph), not count.
+* *"Index the kernel in 3 minutes"* — conflates *cold build* (~24 min on a Linux *subset*,
+  per `competitive-position.adoc`) with *warm query latency* (the leader's sub-ms). Different
+  problems: cold-build = parallel/quantized embed; warm-query = the deferred daemon.
+* *`understand` tool* — already exists (`cmd_understand`, `query.rs:1894`).
+* *Visualization* — genuinely missing (only the *linter* knows "mermaid"). Highest leverage;
+  it hits the stated adoption blocker (*visibility, not speed*).
+* *Persistent default project* — genuinely missing (no `ADEN_PROJECT`/default-project).
+
+Wrote `the research notes/topics/aden-roadmap/execution-plan-match-surpass.adoc` — extends the
+existing capability-gaps/competitive-position docs along the *human-facing/ecosystem* axis, with
+three guardrails up front: offline+deterministic stays the default (GPU opt-in only), agent-file
+config is opt-in (ADR-005), and LSP-style *resolution* is in-scope while *editing* stays a
+non-goal. Match items M1–M6, surpass items (living-docs headline, temporal queries,
+orchestration), and a weeks→12-month sequence.
+
+== Process: subagents must use aden, not grep
+
+Honest miss worth logging: spawned Explore subagents to read the ADRs/research, and they
+defaulted to `ripgrep` — because one prompt literally said "use aden tools *or ripgrep*" and the
+others said nothing. Subagents don't inherit the aden MCP instructions or my memory; they only
+know their prompt. Hardened the rule (in memory): every subagent/workflow prompt MUST mandate
+`mcp__aden__*` and forbid `grep`/`find` for code investigation, with no "or ripgrep" escape
+hatch. Aden's entire value is token reduction; agents defaulting to grep defeats it.
+
+== `aden viz` (M1) — first slice on a branch (`feat/viz-export`)
+
+Per the roadmap's ★★★★★ item. `aden viz <anchor> [--depth N] [--format mermaid|dot|asciidoc|json]`
+renders the *blast-radius* subgraph around a symbol — the same outgoing impact-edge set as
+`impact-diff`/`query --impact`, BFS-capped by depth. New `commands/viz.rs` modelled on
+`impact_diff.rs`; anchor resolution accepts a bare name (`cmd_understand`) or a full `aden://…`
+anchor (unique tail-match, ambiguity errors with samples). Deterministic node ids (sorted),
+root highlighted.
+
+*Text-first by design* — the renderer is NOT aden's job. `mermaid` (GitHub/mermaid.js-native),
+`dot` (graphviz), `asciidoc` (wraps the mermaid in an asciidoctor-diagram `[mermaid]` block so it
+renders inline in the user's existing AsciiDoc pipeline → SVG/PNG), and `json` (the machine seam
+for a future interactive/3D viewer — same node/edge ids as the diagram formats). aden emits
+portable *source*; the user picks the renderer and the final format. This keeps the offline +
+lean + deterministic moat (no bundled Java/Ruby renderer) while making aden compose with
+asciidoctor and anything else.
+
+*The `-j` fix:* the global `-j/--json` flag was a silent no-op for viz (printed mermaid). Now it
+aliases `--format json`, so a global flag never lies about what it does.
+
+Validation battery (against the freshly built binary): help + top-level listing; full-anchor and
+bare-name resolution; ambiguous-name and missing-symbol errors (both with hints); unknown-format
+rejection; *determinism* (byte-identical across runs); *depth monotonicity* (12→40→66 nodes at
+depth 1/2/3); leaf symbol (`risk_tier`) → root-only graph; valid JSON via `-j` (parsed back);
+regressions clear (`communities`/`impact-diff` unaffected). 6 unit tests + MCP flag-parity green;
+clippy clean (lone warning pre-existing in `aden-parse:tree_sitter_common.rs:65`). On branch
+`feat/viz-export`, *not committed or pushed* — awaiting review.
+
+*Next on viz:* `--communities` and `--connectivity` modes (reuse `detect_communities`); wire the
+`json` format into a viewer later.
+
+Committed the first slice as `d3057ca` on `feat/viz-export` (viz only — ADR-005 docs left
+uncommitted for review). *Not pushed.*
+
+== Research-first: visualization design (research base)
+
+Before extending `viz`, ran a research pass (3 parallel read-only agents — two web field-surveys,
+one aden-internal dogfooding aden's own MCP tools, not grep) and wrote the findings to
+`the research notes/topics/aden-roadmap/viz-design.adoc`. Headlines:
+
+* *The field validates emit-don't-render* — the strongest 2026 code-graph tools emit portable
+  formats and leave rendering external. aden is already aligned; do NOT bundle a renderer.
+* *Format by view + scale.* Mermaid's edge cap is a *hard 500* (renderer-side, NOT raisable from
+  emitted text; 280 was the old fixed value) — so Mermaid is small-embeds-only. Graphviz DOT
+  (`cluster_*`) is the right default for mid-size + every community view; JSON is the escape hatch.
+* *Reduce before emit is the differentiator* — competitor UIs almost universally fail by rendering
+  the whole hairball. Plan: depth default 2 (have it), node cap ~50 with `+N more`, edge cap
+  300 soft / 500 hard with Mermaid→DOT→JSON auto-fallback, and community-collapse super-nodes.
+* *Aden's graph already exposes* 26 edge types (semantic/code + activation weight), node_type,
+  source_span, confidence, `detect_communities`, `get_backlinks`, `neighborhood`. *Gaps* to add
+  before a rich viewer: cached degree/centrality, community-id on nodes, edge direction, doc
+  summaries.
+* *Viewer (later, opt-in):* a vendored, offline Sigma.js + graphology localhost page that is a
+  *pure JSON consumer* (no own state, can't drift) — never in the core binary; 3D stays an
+  optional toy, not the primary view.
+
+Recommended sequence is in the doc: (1) `--communities`/`--connectivity` + caps now;
+(2) enrich the `viz` JSON (community-id, degree); (3) only then decide go/no-go on the viewer.
+
+== `aden viz` modes + a determinism bug caught by dogfooding
+
+Implemented the next viz slice (still on `feat/viz-export`): `viz --mode blast|connectivity|
+communities`.
+
+* *`--connectivity`* — BFS in *both* directions over all edge types (callers + callees), each
+  edge kept in its true orientation. Dogfood: `cmd_understand` connectivity surfaces `real_main`
+  (an *incoming* caller) that the outgoing-only blast view never shows. ✓ deterministic.
+* *`--communities`* — whole-graph clusters as Graphviz DOT `cluster_*` boxes (per the research:
+  DOT, not Mermaid, for grouping), per-community fill colors, member cap (12) with `+N more`,
+  top-12 communities. JSON carries community membership.
+
+*The bug:* dogfooding `--mode communities` showed *non-deterministic* output — community sizes
+shifted run-to-run (`359` vs `362`) — even though connectivity (my own BFS) was stable. Root cause
+was NOT the viz code: `detect_communities` builds its node list from `graph.node_indices()`, whose
+order follows graph construction — and `cache.rs` inserts nodes by iterating a `HashMap` (randomized
+per process). Louvain is *order-sensitive*, so that leaked non-determinism into the partition. The
+module's own doc-comment *claimed* determinism ("processed in NodeIndex order") — true but
+insufficient, because NodeIndex order itself isn't canonical.
+
+*The fix* (`crates/aden-graph/src/community.rs`): sort the node list by *anchor* before handing it
+to Louvain — a canonical order independent of graph-construction order. Now deterministic across 3+
+runs (sizes identical). This also repairs the *existing* `aden communities` command, which had the
+same latent bug. Connectivity was immune because it returns an anchor-set + topology (order-free).
+
+Validation: 10 viz unit tests + 4 aden-graph community tests green; MCP flag-parity intact; clippy
+clean. Docs updated (`docs/commands.adoc` gains a `viz` section). Determinism is aden's moat —
+catching this via dogfooding is the system working as intended. Committed `2b9a478` (viz modes +
+determinism fix). Not pushed.
+
+== Design pass: `aden view` browser viewer (research-first, validated)
+
+Before building the browser viewer, wrote the design into the research base
+(`the research notes/topics/aden-roadmap/aden-view-design.adoc`) and *validated the load-bearing
+fork* (the JS library) with a web research agent rather than guessing. Decisions locked:
+
+* *Architecture:* `aden view <anchor>` reuses `viz`'s slice → emits JSON → *inlines* it into a
+  self-contained HTML (`const DATA = {…}`, no runtime `fetch` so it works from `file://`) →
+  auto-opens the browser (`xdg-open`/`open`/`start`, no-ops in headless). The core stays
+  renderer-free; the page is a *pure JSON consumer*.
+* *Library (verified 2026-06-08, jsDelivr/package.json):* vasturiano *`force-graph`* (UMD single
+  `<script>`, ~178 KB, MIT, native `{nodes,links}`) as the 2D default; *`3d-force-graph`* (UMD,
+  ~1.31 MB with three.js bundled in, MIT) lazily inlined only for `--3d` (the "brain" view). Sigma.js
+  rejected (ESM-first, not a clean single-`<script>` drop); Cytoscape (~435 KB) is the fallback.
+* *Vendoring:* embed the pinned, sha256-checksummed minified bundle in the binary behind an opt-in
+  `view` cargo feature (mirrors `dense`); aden's build never runs npm. *No runtime CDN* — removes the
+  supply-chain-at-use risk. (User flagged "don't use platforms hacked to fuck" → captured a
+  supply-chain section: pin + checksum + reputable narrow-surface MIT libs + inert self-contained
+  output.)
+* *Beauty as a goal* (user: "most beautiful thing… and still usable"): dark canvas, community-hued
+  nodes (perceptual palette), degree-sized nodes, hover focus-dimming, click→side panel; 2D stays the
+  default for *reading*, 3D is the gorgeous exploration mode — one shared visual language.
+* *Live "watch" updates* deferred to phase 2 (needs a localhost server — `file://` can't re-fetch;
+  overlaps the warm-daemon). MVP is a static snapshot.
+
+No viewer code yet — design + validated library facts only, per the research-first method. Next:
+implement the MVP slice on the branch.
+
+== `aden view` MVP — built, and opened live on KDE/Wayland
+
+Implemented the MVP (`feat/viz-export`, opt-in `view` cargo feature):
+
+* *Vendored* `force-graph` v1.51.4 (fetched from jsDelivr, 177,599 bytes, sha256 `1008539b…`
+  recorded in `crates/aden-cli/assets/CHECKSUMS`, `sha256sum -c` OK) → embedded via `include_str!`.
+  NOTICE.md updated (MIT). No npm in the build, no runtime CDN.
+* `assets/view.html` — a dark, tasteful template: community-hued nodes (perceptual palette),
+  degree-sized nodes, hub/zoom-gated labels, hover focus, click → side panel (anchor/kind/community/
+  neighbours), `zoomToFit`. Placeholders `/*FORCE_GRAPH_LIB*/` + `/*ADEN_DATA*/` string-replaced
+  (not `format!`, to dodge brace conflicts).
+* `commands/view.rs` (`#[cfg(feature="view")]`): `aden view <anchor> [--mode] [--depth] [--3d]
+  [--no-open] [--out]`. Reuses `viz`'s slice via a shared `viz_json_for` (viewer can't diverge from
+  the text formats), inlines lib+JSON into self-contained HTML, opens via per-OS opener
+  (`xdg-open`/`open`/`start`, graceful no-op headless). `--3d` guarded (3d-force-graph asset is a
+  follow-up).
+
+Validation: both builds compile (view-on and default-off); generated HTML is *fully self-contained*
+— embedded lib + inlined valid JSON, *zero external `src`/`href`* (verified). clippy clean; MCP
+flag-parity intact (view is feature-gated, absent from default CLI). *Live test:* on KDE Plasma /
+Wayland (`WAYLAND_DISPLAY=wayland-0`, default browser Brave), `aden view --mode communities` wrote
+the HTML and `xdg-open` opened it as a Brave tab — the community "brain" rendered. Awaiting visual
+feedback (beauty is an explicit acceptance bar). Not pushed.
+
+== Visual iteration from a real screenshot (user feedback)
+
+User shared a screenshot of the live communities view. Two problems, both fixed:
+
+* *Cluttered, overlapping long labels* ("contract.rs#ContractState::apply" piled on each other). Fix:
+  drop the persistent on-canvas text entirely; labels are now *tooltip-only*, showing the *short
+  symbol name* (the "actual call" — truncated from the anchor at `#`/`/`), with a dimmed file/context
+  subtitle; full anchor lives in the click panel. Dark themed `.graph-tooltip`.
+* *A sea of disconnected dots* — the communities view rendered *capped individual members*, most of
+  whose edges were capped out, so they floated alone. Fix: the JSON / viewer communities view now
+  renders a *collapsed super-node overview* — one node per community (sized by membership) +
+  aggregated inter-community edge weights (`communities_overview` in `viz.rs`). 144 lonely dots → 12
+  connected community nodes (aden-cli 382, aden-parse 362, aden-graph 137 …) with 32 super-edges. The
+  *static* DOT/mermaid communities keep member cluster-boxes (boxes group fine without a force layout).
+
+10 viz tests still green. (Aside: the overview surfaced an `unknown` super-node of 367 symbols — the
+known docs-only/non-manifest project-name-inference bug, already on the backlog.)
+
+*Ideas captured for next (in research):* group/color clusters by *multiple axes* — directory area /
+node type / name / utility — not just Louvain; and the documentation-alignment angle (the visible
+code↔doc graph makes the code↔words round-trip tighter for agents).
+
+== Round 2 — the "visual nightmare" (second screenshot)
+
+A connectivity view of a hub (`cmd_understand`, depth 2) came back a *nightmare*: giant overlapping
+blue blobs, hundreds of nodes. Two root causes — both the things the research (xref:viz-design) told us
+and I'd deferred:
+
+* *No reduce-before-emit caps.* A hub at depth 2 pulls in *hundreds* of nodes. Added `NODE_CAP = 60`
+  to `blast_slice`/`connectivity_slice` — closest-first BFS, so the cap keeps the *nearest* reach and
+  only introduces a new node while under the cap (edges to already-kept nodes still count, so the
+  shown subgraph stays connected). Verified: `cmd_understand`/`FjallStorage::new` connectivity depth 2
+  → exactly 60 nodes (was hundreds).
+* *Over-aggressive node sizing.* `nodeVal = 1 + degree` made high-degree nodes *enormous* (area ∝
+  degree). Clamped: degree views use `1 + min(√deg, 3)` (small, roughly uniform), super-nodes use
+  `min(2 + √size, 12)`. Smaller `nodeRelSize`, plus stronger charge (`-140`) and link distance (38) so
+  the layout spreads instead of blobbing.
+
+Lesson logged honestly: I shipped the modes before the caps and it bit immediately on a real hub — the
+research had flagged exactly this. Caps are not optional polish; they are the feature.
+
+== Round 3 — drill-down (the collapse hid too much)
+
+The super-node overview was clean but "lost a lot of the actual useful visualizations" (user). Fix:
+*drill-down*. The communities JSON is now *hierarchical* — the super-node overview PLUS a per-community
+`drill` subgraph inlined in the same self-contained page. The viewer shows the overview; clicking a
+community expands into its members with a `← back` control (the research's collapse→expand-on-demand,
+no re-call to aden). One catch caught immediately: taking the *first 12 alphabetical* members gave a
+drilled community with *0 intra-edges* (disconnected again). Fixed by ranking members by
+*intra-community degree* and showing the connected core (cap 30) → e.g. 30 members / 113 intra-edges.
+Commit `a57def9`.
+
+*Idea captured (user):* "open in editor" from a node — a right-click / panel link that opens the
+symbol's file at its line in VS Code (or the OS app for the doc type). Very doable offline: aden has
+each symbol's `source_span` (file + line); emit it in the node JSON and render a `vscode://file/<abs>:
+<line>` link (browsers route custom URI schemes to the app — no server, no syscall hijack needed).
+Captured in the view design.
+
+== Round 4 — open-in-editor (shipped) + OS-agnostic
+
+Implemented "open in editor": right-click a node (or the panel "open in editor →" link) opens the
+symbol's file at its line in the editor. No syscall hijack — a `vscode://file{file}:{line}` URI; the
+browser routes the registered scheme to the desktop app.
+
+* *Where the line comes from:* the graph node's own `source_span` is *empty* for symbols (caught
+  immediately — 0/14 nodes had it). The spans live in the *store*, same source `impact-diff` uses
+  (`grep::load_symbol_spans` → `Span{anchor,start,end}` keyed by file). Switched to that → 13/14 real
+  symbols get file+line (synthetic `mod-*` hubs correctly have none).
+* *`--editor`* flag (vscode | cursor | vscodium | zed | idea | custom `{file}`/`{line}` template).
+* *OS-agnostic, deliberately:* the browser opener already covers Linux (`xdg-open`) / macOS (`open`) /
+  Windows (`cmd /C start`); the editor path is normalized URI-ready (forward slashes + leading slash,
+  so Windows `C:\x` → `/C:/x`), and `vscode://`-style schemes are cross-platform.
+
+Caught + fixed two issues this round (keeping correctness/clarity a priority): looking for line info
+on the wrong struct (graph node vs store span), and judging a generated HTML from a *stale binary*
+(clippy doesn't rebuild the bin → rebuilt before trusting the output). Clippy clean (bundled-arg lint
+addressed), 10 viz tests green.
+
+Used a subagent (aden-enforced — `mcp__aden__*`, no grep) to draft the benchmarks-as-documentation
+research note in parallel while writing the code-coupled docs here.
+
+== Round 5 — visuals/usability research → highlight + focus
+
+User: "could still improve overall visuals and usability — maybe more research is in order?" Ran a
+two-agent web research pass (node-link graph UX best practices; `force-graph` API depth) and
+*preserved the findings in the research dir* —
+`the research notes/topics/aden-roadmap/viz-ux-improvements.adoc` (prioritized plan + the
+force-graph methods + sources). Implemented the top low-effort/high-impact wins:
+
+* *Hover-to-highlight + dim* (focus+context — the #1 win): hovering a node highlights it + its
+  neighbours + their links and dims everything else; a halo ring marks the focus. Needs
+  `autoPauseRedraw(false)` + per-node pre-computed `neighbors`/`adj` (force-graph doesn't do this for
+  you). `onLinkHover` highlights an edge's endpoints.
+* *Click-to-focus* (`centerAt`) and *zoom-to-fit on `onEngineStop`* (not a `setTimeout`, which fires
+  before nodes have coordinates).
+* Directional particles on highlighted links (animated flow); charge/link-distance tuned.
+
+Next from the research (documented, not yet built): collision force (needs a vendored `d3-force`),
+in-graph search/filter by name/edge-type/community, DAG layout for focused call subgraphs.
+
+*Editor:* user is on *VSCodium* → `--editor vscodium` (already supported; the `vscode://` default
+just wasn't their registered handler, hence the app-chooser prompt). Popular editors covered:
+vscode / vscodium / cursor / zed / idea + custom template.
+
+*Research now lives in the research dir* (both `viz-ux-improvements.adoc` and the subagent's
+`benchmarks.adoc`), so it's available later — not just in chat.
+
+*Strobe bug (caught fast, took it seriously — "nauseating, like a flashbang 100x/sec on OLED").*
+The first highlight cut had two strobe sources: animated `linkDirectionalParticles` (constant motion)
+and a *non-sticky* highlight that cleared on every `onNodeHover(null)` — so crossing the gaps between
+dense nodes flashed full-bright→dim many times a second. Fixed: removed the particles entirely; made
+the highlight *sticky* (only reacts to a genuinely new node, ignores null/gaps and repeats); softened
+the dim from .12 → .34 alpha (gentle de-emphasis, not a blackout) and the halo to a single soft ring
+on the focused node. Accessibility/health matters more than flashiness — logged the lesson.
+
+== Round 6 — navigation: clickable neighbours, back-trail, in-graph search
+
+Three user-requested usability wins, all shipped (`feat/viz-export`, commits `1775b2e`, `5e7322f`):
+
+* *Clickable neighbours* — panel neighbour rows focus their node (highlight + centre + open its
+  panel), so you walk the graph from the list.
+* *Panel back-trail* — walking neighbour→neighbour pushes a history stack; a `← back` control steps
+  back to the previous symbol. History resets on a graph-node click and on view change.
+* *In-graph search* — a search box (or `/`) filters the current view by name/anchor, lights up
+  matches (dims the rest), arrow-keys + Enter to jump, click a result to focus, Esc to clear.
+
+The viewer now feels like a *navigator*, not just a picture: search to land, click neighbours to walk,
+back-arrow to retrace, right-click to open the file. Research status updated in
+`viz-ux-improvements.adoc`.
+
+*Back-trail bug + keyboard-centric nav (`30de9fa`).* User: back "doesn't work with button or keyboard."
+Root cause: the trail only recorded *panel-neighbour* clicks; clicking *graph nodes* reset it, so back
+had nothing to return to. Fixed by routing *every* focus (graph click, neighbour click, search jump)
+through a single `navTo()` that records history (`panelBack()` pops without re-recording). Added full
+keyboard nav (the user asked, and it's a strong default): `/` search · `↑↓`/`j`/`k` select neighbour ·
+`Enter` walk · `Backspace`/`Alt+←` back · `o` open in editor · `Esc` close. Lesson: "clickable" wasn't
+enough — the *history model* had to be unified across all entry points.
+
+*Live list preview (`e852451`).* User: "scrolling the list should update the visual in real time."
+Hovering or arrow-selecting a neighbour row now lights that node (+ links + ring) in the graph
+immediately; arrow-selection also pans gently to it; leaving the list restores the current node.
+The list and the graph are now two views of one selection.
+
+*Edge-type filter (`6a796fb`).* Bottom-left chips list the relationship types in the current view
+(`Calls`/`Uses`/`Documents`/…); toggling one shows/hides those edges live via `linkVisibility`. One
+ordering gotcha fixed: `activeTypes` must be populated in `buildData` *before* `graphData`, else the
+first paint hides every edge.
+
+*Authoring/licensing pass.* Verified every new artifact is properly attributed: source files carry
+the `Ernest Hamblen <rioplay@rioplay.dev>` + AGPL-3.0 SPDX header (added one to `view.html`,
+`4794bd3`); research docs `:author: Ernest Hamblen`; ADR-005 `:author: RioPlay`; git author RioPlay;
+no Claude co-author. Vendored force-graph (MIT) recorded in NOTICE.md.
+
+*Idea captured (user): live agent-activity overlay* — pulse the nodes an LLM is touching as it works.
+Uniquely feasible because aden already resolves the agent's anchors (its MCP tool calls + edit→span
+mapping). Needs the phase-2 watch server for live; *replay-from-log* is the offline first cut.
+Documented in the view design.
+
+Next from the research: collision force (vendor `d3-force`), filter by community, DAG layout for call
+subgraphs, then the live-activity overlay.
+
+== Round 8 — git-history replay: watch the project build itself ⭐
+
+The session's headline. The idea started as "simulate what an LLM is touching" and crystallised into
+something better: *graph the git history and watch the codebase populate from nothing to now.*
+
+*The pipeline (all real data):*
+
+* `git_activity(root, max)` walks `git log --reverse` (oldest→newest, `--max 0` = entire history) and,
+  per commit, maps its changed files → the symbols defined in them (via the store's per-file spans —
+  the same source as "open in editor"), emitting `{label: subject, date: %cs, anchors: […]}`.
+* `--replay` makes the *graph itself* the project's history surface: `anchors_json` builds it from the
+  *union of all touched symbols*, ranked by **intra-set degree** so the cap keeps the connected core
+  (first cut took them alphabetically → *0 edges*; the fix → 250 nodes / **671 edges** / 243 commits).
+* The viewer plays it as a **growth animation**: `growMode` + a `revealed` Set drive
+  `nodeVisibility`/`linkVisibility`, so the graph starts *empty* and nodes are *revealed + pulse*
+  (fading green glow) as the commit that introduced them lands. Ends on the full graph.
+* Controls, all user-requested in the same breath: a **scrubber** (seek = rebuild `revealed` up to that
+  commit), a **speed** slider, a live **item count** (`N / total`), and the **commit date + subject**
+  in the readout. Spacebar plays/pauses.
+
+The engine is source-agnostic: a real `DATA.activity` log (git now; a live agent stream later) plays
+back, else a simulated agent-walk fallback. So the same growth view will one day animate an agent
+working in real time.
+
+*Product call (user): the graph is on by DEFAULT now* — `view` moved into the default cargo features
+("too useful to leave out of the picture"); disable with `--no-default-features`. The 178 KB vendored
+force-graph rides along; default builds gain the whole interactive+replay surface.
+
+Honest note: the first replay had 0 edges (alphabetical cap) and the wrong graph (the 60-node slice
+vs the 940 touched anchors) — fixed by making `--replay` build its own touched-symbol graph and rank
+by connectivity. Watching aden draw *itself* from the first commit to this one is, frankly, the
+coolest the tool has looked. Commit `ed2e56b`.
+
+== Round 9 — declutter the replay: collision + dynamic zoom
+
+The full-history replay was a *hairball* (user screenshot): nodes overlapping, long crossing edges, and
+the camera jumping to single nodes so you lost the build. Two fixes (`2273f19`):
+
+* *Collision force* — wrote a tiny inline O(n²) collide (no `d3-force` vendor; the standalone bundle
+  needs quadtree/dispatch/timer, not worth the chain — and O(n²) is nothing at ≤250 nodes). Nodes now
+  push apart instead of stacking. Charge/link-distance bumped for more breathing room.
+* *Dynamic zoom* — each replay step (and on scrub) `zoomToFit`s the *revealed* set, so the camera
+  *follows the build expanding outward* over time instead of snapping to one node. This is the
+  "dynamic zooming as time moves" the user asked for.
+
+*Captured as the next big swing (user): a temporal / parallel layout* — position or band nodes by
+commit time so you can read *when* something was changed and *what happened in parallel*, not just the
+force layout's spatial guess. Likely a time-axis (x = commit time) hybrid, or DAG-by-time. This is the
+piece that turns the replay from "cool growth" into "legible project timeline." Queued with the other
+high-value items (DAG layout, community filter) to pull forward.
+
+== Round 10 — visual polish: colour by subsystem + glow
+
+User: "more visually appealing." Biggest lever was that every node was the *same blue* (the
+blast/connectivity/replay JSON had no grouping). Now each node carries a `group` (module/crate, from
+its anchor) and is coloured by it with a stable sorted Catppuccin palette — so the graph reads as
+*structure* (aden-cli vs aden-graph vs aden-core in distinct hues) and each commit's touched area
+shows by colour. Added a soft colour glow behind every node (`hexA(colorOf(n), .10)`, skipped on
+dimmed nodes) for a premium nebula feel on the dark canvas. Commit `3ec79cb`. Suddenly it reads like a
+product, not a debug dump. Next aesthetic/legibility candidates: a colour legend, the temporal layout,
+DAG mode.
+
+== Round 11 — fan-out on expand
+
+User: "once something gets expanded the functions should fan out." Focusing a node (graph click,
+neighbour-list click, search jump, or back) now pins it, positions its neighbours on a *ring* around
+it, reheats the sim, then releases the pins ~1.7 s later so the layout relaxes (collision keeps them
+spread). Expanding a node now *unfolds* its functions instead of leaving them clumped — much clearer
+than reading a focus out of a static hairball. Commit `4164453`.
+
+== Round 12 — that fan-out was wrong; clean camera-only focus + view ergonomics
+
+The fan-out *looked broken* in practice (user screenshot): pinning neighbours + `d3ReheatSimulation`
+yanked the *whole* layout into a distorted, stretched mess on every click. Ripped it out. New model
+(`f8d0fae`): clicking a node *only moves the camera* to frame its cluster (`zoomToFit` over the node +
+its neighbours) — the layout is never disturbed, so it's clean and reversible. Lesson: don't mutate the
+simulation for a focus interaction; move the camera, not the nodes.
+
+Plus the ergonomics the user asked for:
+
+* *Easy full view* (the missing "most expanded view"): a `⊙ fit` button + `f` + `Esc` + click-empty
+  → zoom-to-fit everything visible. "Cluster one at a time, then snap back closed."
+* *`h` hides all chrome* (header, search, replay bar, filter, hint, panel) for a clean graph / screenshot.
+* *Collapsible side panel* (▾/▸ toggle).
+
+== Round 13 — colour edges by relationship type; chips = legend
+
+User: "all graph relationships … color coded including the toggle icons themselves." Edges were a
+uniform gray, hiding the relationship *kind*. Now each type (Calls/Uses/Documents/PartOf/…) gets a
+stable colour (sorted → consistent), and the edge-type filter chips carry a matching colour dot +
+border — so the chips are simultaneously the *legend* and the *toggles*. Commit `61ef8ba`.
+
+*Reaffirmed (user FYI): the viewer is polyglot by construction* — it consumes aden's generic graph
+JSON (anchors, typed edges, groups), and `--replay` is plain `git` + the store's spans, so *nothing*
+is aden-specific. Group colours come from the anchor's module/dir segment (works for any language's
+project layout); edge colours from aden's universal `EdgeType` set. Point it at a Python/Go/TS repo
+and it behaves identically — verified earlier this topic with create-t3-app for `communities`/
+`impact-diff`; the viewer rides the same language-agnostic graph.
+
+== Round 14 — nested spheres + a user-test pass
+
+*Nested expand-in-place* (`7736fa1`): the "too trimmed" feeling was an *unfinished* part — clicking a
+sphere *replaced* the view (drill) instead of unfolding it. Now clicking a community super-node
+expands its functions *in place* (members fan out on short membership links) while the other spheres
+stay collapsed and their inter-sphere super-edges remain; click again to collapse. Reuses existing
+node objects so positions persist (no reshuffle).
+
+Then *played user* (user's ask: "what makes sense, what feels limited, what needs polish"). Honest
+findings, prioritized:
+
+. *Overview was unlabelled coloured dots* — had to hover each sphere to read it. → *fixed* (`85fe498`):
+  spheres always labelled on-canvas, hubs label on zoom-in, hovered node labels; others tooltip-only.
+. *Bare `aden view` errored* ("needs an ANCHOR") → *fixed*: now opens the whole-project sphere overview.
+. *Search is per-view* — in the overview you can only find the 12 sphere names, not the thousands of
+  functions under them. *(open — wants a global search that expands the right sphere + focuses.)*
+. *No in-app mode/depth/anchor change* — every exploration is a CLI re-run. *(open — the big one; wants
+  in-viewer "expand blast radius from here" / mode switch, ultimately the watch-server.)*
+. *Expanded spheres connect core↔core, not function↔function across spheres* — drill JSON only has
+  intra-community edges; the cross-sphere member edges aren't emitted yet. *(open — finishes the
+  "connect to other graphs" vision.)*
+. *Panel doesn't show node kind* (Function/Type/Module) — never emitted. *(open, easy: thread a kind
+  map like the src map.)*
+
+Queued by leverage: cross-sphere member edges + global search + in-app re-scope, then panel `kind`,
+then the temporal layout. The viewer's gone from "debug dump" to "explorable map" — the gaps now are
+about *reach* (search/scope across the whole graph), not looks.
+
+== Round 15 — fixes + the v2 direction (checkpoint; context running low)
+
+Shipped (`0fd9fbc`): killed the bottom-left chip overflow (inter-sphere edges typed `"N edges"` became
+fake chips → now "meta": out of legend, neutral, always-on); *global search* (matches name/label/
+anchor/FILE, reaches every function in every sphere even collapsed, picking one unfolds its sphere);
+*live depth slider* (client-side hop distance from the focus). Earlier this round: *live density
+slider*, *nested expand-in-place spheres*, *sphere/hub labels*, *bare `aden view` → overview*, *layout
+retune* (localised charge + firmer collision).
+
+*Then a full user-test critique (user asked for brutal feedback to "fix the graph once and for all").*
+Core finding: the viewer is *four siloed single-shot graphs* (blast/connectivity/communities/replay),
+each a CLI run, and you're *trapped* in whichever was spawned — every "show this differently / re-root
+on this node" is a quit + re-run. That's the real friction; sliders/chips/panel are polish on a locked
+page. The fix → *viewer v2: one inlined comprehensive graph + client-side LENSES toggled by keystroke
+(`1`–`4`: Overview / Neighborhood / Impact / Replay), re-rootable on any node.* Full design (data
+shape, lens semantics, re-root, controls, search-provenance) in
+viewer-unified-explorer.adoc — *the next
+session starts there.*
+
+*Architectural lesson for aden (user asked me to reflect on code↔prose):* building the viewer kept
+hitting the same wall — the per-node "view model" the UI wants isn't cheaply available (had to thread
+`src_map` for file/line, `group_of` for crate, post-hoc community; still lack `kind`, degree, and the
+*containment/doc* neighbourhood). So the viewer refactor and an aden architecture improvement are the
+*same work*: aden should expose a *first-class whole-graph view export* (every node with
+`kind/group/community/degree/file/line/part_of/documented_by`, every typed edge) AND a fast
+`aden context <anchor>` → `{contains, part_of, documented_by, explains}`. *Code↔prose is already in the
+graph* (docs are first-class nodes with `Documents`/`Explains`/`PartOf` edges) but under-surfaced — the
+user's "search shows what regions/docs/anchors a match is part of" feature is literally *reading that
+neighbourhood*, and it's the concrete code↔words bridge that makes the round-trip real for agents.
+Captured in the design doc.
+
+*State:* v1 viewer all committed on `feat/viz-export` (NOT pushed), `view` is a default feature, ADR-005
+still `proposed`/staged. Authoring all RioPlay; drift-checked clean. Next: write the v2 design's whole-
+graph export (Rust) + lens refactor (viewer), starting from `viewer-unified-explorer.adoc`.
+
+== Round 16 — v2 step 1: whole-graph view-model export landed (`1819d55`)
+
+First concrete v2 brick. `aden viz --mode graph -j` now emits *one comprehensive payload*: every node
+with its full view model — `{anchor, label, group, community, kind, degree, file, line}` — plus every
+typed edge among the kept nodes, *including the code↔prose `Documents`/`PartOf`/`RelatesTo` edges*
+sitting right beside `Calls`/`Uses`. Nodes are degree-ranked (importance) and capped (default 800),
+with `total_nodes`/`shown_nodes` reporting the cut. Validated on aden's own repo: 2777 → 800 nodes,
+3648 edges, 32 communities; top hubs `mod-aden-cli` (deg 788), `mod-unknown` (730), `mod-aden-parse`
+(720); prose nodes survive the cap. 10 viz tests green, clippy clean.
+
+*Why this is the keystone:* it's the architecture note made real — aden computes the rich whole-graph
+*code+prose* view model **once**, and the viewer's client-side lenses (and, later, agents / `aden
+context`) slice it instead of each re-deriving file/line/community/kind/degree. The viewer can now hold
+the whole picture and switch view / re-root with zero re-runs. *Next:* the viewer lens refactor (one
+load → `1`–`4` lenses + click-to-re-root) consuming this payload, then `--cap`/`--full` flags and
+folding git `activity` into the same payload. *Aden side-finding logged:* docs are typed `Module`, not
+`Adr`/`Note` — `detect_node_type` is path-based, not doc-kind aware; a separate enrichment.
+
+== Round 17 — the graph audits itself: viewer-driven optimization findings
+
+The viewer stopped being a toy and became a *diagnostic*. Asked "what does the graph show we should
+optimise?", analysed the whole-graph payload (degree/fan-in/fan-out, community group-purity,
+cross-crate coupling) — excluding the synthetic `mod-*` scaffolding that connects to everything by
+construction. Findings, evidence-backed:
+
+*Healthy:* communities map cleanly to crates (98% purity on the big ones); cross-crate coupling flows
+in proper layered directions (everything → `aden-core`; `aden-cli` → everything). Highest blast-radius
+nodes are `aden-core::Error` (fan-in 108) and `Document` (65) — expected for core types, but the #1
+change-risk points.
+
+*Optimisation candidates:*
+
+* 🔴 *706 redundant mirror edges — `Documents` is inverted `PartOf`.* 100% of `Documents` edges are
+  the exact inverse of a `PartOf` edge; ~706 originate from `mod-*` nodes (containment), vs only ~374
+  genuine prose→code edges. Source is exact: `generate.rs#link_store_edges` emits a mirrored pair for
+  every containment — `(mod-X) --Documents--> symbol` (494) *and* `symbol --PartOf--> (mod-X)` (495),
+  plus the project→module pair (603/605). So `Documents` is (a) ~19% of all edges as pure mirrors and
+  (b) a *semantic misuse* — a module *contains*, it doesn't *document* — that buries the real code↔prose
+  signal 2:1. *But not trivially removable:* `aden-asm/traverse.rs` walks `Direction::Outgoing` ONLY,
+  and `ask`'s fallback to `mod-project` traverses project→modules→symbols via exactly those forward
+  `Documents` edges. The PartOf inverse can't be followed by an outgoing-only walk. So the "redundancy"
+  is partly *load-bearing* for top-down traversal on a one-directional engine. Two candidate fixes:
+  (A) remove + make traversal follow incoming `PartOf` (broader semantics change), or (B) introduce a
+  new `EdgeType::Contains` for the forward containment edge — frees `Documents` to mean only real
+  prose→code, keeps outgoing top-down traversal, threads `Contains` through enum/kind/all_edge_types/
+  string-maps/validate/activation_weight/asm-priority. *Ran a read-only Workflow* (5 parallel Explore
+  agents, one per subsystem: asm, query/routing, check/heal/gen, graph/core, viz/lsp/mcp/store) to audit
+  every consumer and produce a decision memo + exact edit list before touching a shared edge type. The
+  real doc→code `Documents` (generate.rs:567) and its inverse must be preserved.
+* 🟡 *Community detector junk bucket.* `c7` looked like "mcp↔lsp entanglement" (50% purity) but has
+  ZERO real edges between them — Louvain just sweeps the small peripheral crates (mcp, lsp, benches)
+  into one leftover community. Misleads the viz + any community feature. Fix: don't force-merge
+  low-connectivity nodes; leave tiny modules standalone or label low-purity communities "misc".
+* 🟡 *`aden-cli` monolith.* `c0` = 242 nodes, 1.4× the next (`aden-parse`, 171); `real_main` fans out
+  to 63 calls. Candidate: extract command bodies into library crates so MCP/LSP call them directly
+  instead of `aden-mcp/run_aden_command` shelling out.
+
+*Method note:* used `mcp__aden__grep` to locate the edge-emission and consumers (per [[use-aden-to-investigate]]),
+and verified the `Documents`==inverse-`PartOf` claim against the live payload (100%, 706/706) before
+believing it. Decision memo + implementation pending the workflow audit.
+
+== Round 18 — `EdgeType::Contains` split lands (the audited fix)
+
+The workflow audit (5 parallel `Explore` agents + a synthesis memo, 336k subagent tokens, 172s) returned
+a clear verdict: *fix (A) plain removal is UNSAFE* — 4/5 subsystems (asm-traverse, query-routing,
+graph-core, check-heal-gen) depend on the forward edges with *high* risk, because `ask`'s thin-stub
+fallback to `mod-project` and intent-routing reach module members by walking those edges *outgoing*
+(traversal is `Direction::Outgoing`-only; the `PartOf` inverse is unreachable that way). Only
+viz/lsp/mcp/store was clear. So I implemented *fix (B): a new `EdgeType::Contains`* for the forward
+containment edge, freeing `Documents` to mean *only* genuine prose→code.
+
+*Deliberate deviation from the memo:* gave `Contains` the *exact* priority (11) and activation weight
+(0.5) the forward edges had as `Documents` — so this is a *pure type-rename + signal cleanup with zero
+traversal-behaviour change*, not the memo's stronger 0.9/priority-4 (which I left for a separate,
+deliberate tuning decision). Threaded `Contains` through 11 sites the compiler + audit identified:
+enum + `activation_weight` (aden-core), `AdenEdge::kind` + `all_edge_types` + the string→type map +
+`build_from_storage` load-list + `validate_typed_edges` code-types (aden-graph), `edge_priority`
+(aden-asm), `parse_single_edge_type` + `valid_edge_types` (aden-cli util), the two emit sites
+(generate.rs:494,603 only — *567 doc→code left untouched*), and an intent-filter rule in query.rs
+("any intent that traversed `Documents` for members must also traverse `Contains`"). The one
+*non-compiler-enforced* site — `build_from_storage`'s hardcoded `edge_types` vec — was the real trap
+the audit flagged: miss it and Contains edges load as nothing on reload. Caught it.
+
+*Validation (all green):*
+
+* `cargo build --workspace` clean — no missed exhaustive `match` arm (the enum-threading safety net).
+* tests: aden-asm 27, aden-graph 30, aden-core 27 — all pass.
+* regen self-graph → `aden viz --mode graph -j`: `Contains` 728 == `PartOf` 728 (containment mirror);
+  *0* `Documents` edges from a non-prose node, *0* `Contains` from a non-`mod-*` node — the signal is
+  now clean by construction.
+* the behaviour fix (A) would have broken: top-down from `mod-project` @depth2 yields
+  `Contains:58, PartOf:59, Documents:1` — containment reachable outgoing via `Contains`, *and* a real
+  doc→code `Documents` edge survives. `aden ask "overview of the aden-cli crate"` routes to the
+  `mod-project` fallback and its `Edges:` line now includes `Contains` — assembles real context, not a
+  thin stub.
+* `aden check .`: all typed edges valid, all doc path refs resolve. `aden heal . --gc`: 0 orphans,
+  0 drift, 2413 kept.
+
+*Net:* `Documents` is now a *pure* code↔prose signal (the ~374 real prose edges no longer buried 2:1
+under containment), centrality no longer double-counts membership, and the graph the viewer renders is
+semantically honest — at zero behavioural cost. Workflow-audited, compiler-enforced, behaviour-verified.
+
+== Round 19 — trajectory check (where are we, does it match the mission?)
+
+Stepped back to read the roadmap + logs and validate direction. Honest read:
+
+* *The headline mission is already shipped.* The roadmap's "Retrieval — the headline work" (hybrid
+  dense+BM25, M14 resolved on the eval, 2026-06-07) is aden's actual match/surpass-the-leader value,
+  and it's *done*. This session did *not* touch it.
+* *This session = the `aden viz` (M1) item — and then some.* M1 ("text export + optional browser
+  viewer") is genuinely on the roadmap, so the work aligns. But it *over-ran scope*: synapse mode,
+  full-history replay, LOD scaling are polish well beyond what M1 prioritised. Beautiful, useful, but
+  gold-plating relative to the roadmap.
+* *The real high-value discoveries were emergent, not planned.* Dogfooding the viewer made the graph
+  *audit itself* → the `EdgeType::Contains` split (a true correctness/clarity win on the graph aden
+  serves agents) and the *0.8% code↔prose coverage* finding (a concrete gap in aden's reason to
+  exist). These are more on-mission than the viewer chrome that surfaced them.
+
+*Course-correct:* the viewer is "done enough" — stop gold-plating. Highest-value next moves, in order:
+(1) *consolidate the branch* — `feat/viz-export` is ~33 unpushed commits + ADR-005 still staged;
+decide merge strategy and land the ADR's two blocking items. (2) *Fill the doc-coverage gap* — the
+hot undocumented stubs, dovetailing with the planned *heal LLM-drafted proposals*; raises aden's own
+code↔prose density (on-mission, and proves the `Contains` payoff). (3) reorient toward the retrieval/
+benchmark roadmap items (M2 persistent project, M6 benchmark breadth) — the actual competitive needle.
+Docs synced this round (`cc8f9f7`): `Contains` semantics, `viz --full`, `view` whole-graph default,
+synapse — the source had drifted ahead of the prose.
+
+== Round 20 — the doc-stub "fill" is a trap (verify-before-building paid off)
+
+Set out to fill the doc stubs; *investigation killed the task* before any pointless work. Findings,
+each verified against the repo:
+
+* *The per-symbol `.adoc` stubs are gitignored ephemeral scratch.* `.gitignore:18` = `crates/**/*.adoc`.
+  All 29 sidecars are untracked, 4-line `agent-note::STUB[Auto-generated by aden-heal]` files. Filling
+  them ships *nothing* and `heal` regenerates them. So the literal "fill the stubs" task is futile.
+* *The code is already documented.* The "undocumented hot symbols" have inline rustdoc — e.g.
+  `aden-core::Error` = `/// Unified error type for the Aden ecosystem.` aden captures rustdoc as the
+  *node's own content/contract*, not as a doc→code edge. So "0 incoming Documents" ≠ "undocumented".
+* *The 0.8% was real but mismeasured the point.* True doc→code-symbol graph coverage is ~0.8% whether
+  you count `Documents` (29, all from the gitignored stubs) or `RelatesTo` (432, almost entirely
+  *doc↔doc* cross-refs). aden's narrative docs cross-link to *each other*, not to individual symbols —
+  a normal guide-level doc design, not a defect.
+* *The genuine architectural smell:* aden's `Documents` (prose→code) edge is fed *only* by the
+  gitignored per-symbol stub mechanism — so it can never durably enrich the graph. If code↔prose edges
+  matter (they're aden's reason to exist), they should derive from a *committed* source: rustdoc
+  extraction (the docs already exist on the node) and/or `<<code-anchor>>` refs in the narrative docs.
+
+*Decision:* do NOT bulk-fill stubs. The honest options are (a) a small, zero-footprint enrichment —
+wire ~a dozen hot symbols into the *committed* narrative docs via `<<anchor>>`; (b) the architectural
+fix — derive `Documents`/`Explains` edges from rustdoc so the graph reflects the docs that already
+exist; or (c) defer doc-work and move to the on-mission retrieval/consolidation track ([[Round 19]]).
+Surfaced to the user rather than generating throwaway docs. Branch consolidation: green — default build
+clean, full workspace tests pass, zero *new* clippy warnings (2 pre-existing in aden-parse/cli_tests),
+`feat/viz-export` merge-ready; ADR-005 left staged as its own future branch.
+
+'''
+_Session continued past midnight — 2026-06-09 work (M6 benchmark breadth, the gen/search determinism fix chain, release prep) is in link:/devlog/2026-06-09/[the 2026-06-09 log]._
+
+'''
+[.devlog-foot]
+This is a lightly cleaned entry from the raw link:/devlog/[Aden devlog]. The polished stories that draw on these days live in the link:/series/aden/[Aden series].

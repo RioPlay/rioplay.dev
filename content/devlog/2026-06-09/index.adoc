@@ -1,0 +1,378 @@
+---
+title: "Devlog: 2026-06-09"
+slug: "2026-06-09"
+date: 2026-06-09
+lastmod: 2026-06-09
+draft: false
+summary: "Continuation of the long viewer session into the headline retrieval work. Scoped + built M6 (benchmark breadth + agent-task-success), produced the first new-repo numbers, and — when bench.py caught it — chased aden gen non-determinism through five root causes to fully reproduc..."
+categories: ["Devlog"]
+tags: ["aden", "devlog"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+Continuation of the long viewer session into the headline retrieval work. Scoped + built M6
+(benchmark breadth + agent-task-success), produced the first new-repo numbers, and — when `bench.py`
+caught it — chased `aden gen` non-determinism through five root causes to fully reproducible retrieval.
+Closed with a 5-repo / 5-language hybrid-vs-BM25 result and a release-ready `feat/viz-export` branch —
+which then *actually shipped*: v0.2.0 tagged and pushed, ADR-005 merged (PR #18), blog Part 2 published,
+and a post-release run of graph-model work (ADR-006/007, typed-edge wave 1, MCP parity) on main.
+
+== Round 21 (carried into 2026-06-09) — validate, don't build; two self-corrections
+
+Applied yesterday's lesson to two would-be builds; both got *narrowed by verification* before any
+sunk cost.
+
+* *Prose→code auto-linker — validated, deferred.* Before building option (b) (derive durable
+  `Documents` edges from committed prose), prototyped it offline: build `name→anchor` over 1028
+  unambiguous symbols, scan `docs/*.adoc` for backtick mentions. Result: *39 would-be edges, 31 symbols
+  linked (vs 10), low false-positive*. Clean mechanism — but modest on aden's own guide-level docs,
+  and a proper build is a multi-file `aden-parse` feature. So *don't build on momentum for 39
+  self-edges*; captured as a ready-to-build proposal
+  (prose-mention-autolink) to ship when there's a symbol-dense doc
+  corpus to prove real lift. The `Contains` split already delivered the durable code↔prose win.
+* *The "c7 junk-bucket" finding was my own CAP artifact.* Went to make community labels honest
+  (`mixed` when no subsystem holds ≥60%) for the c7 mcp+lsp merge — and on verifying against the
+  *full* graph found *zero* mixed communities: c7's 50% "purity" was an artifact of analysing only the
+  800 highest-degree members (partial membership skews the ratios). The detector is fine; my earlier
+  diagnosis was wrong. Shipped the label fix anyway (`f8eeb24`) as a *defensive* correctness
+  improvement (no-op on aden today, honest on genuinely-mixed graphs) + test.
+
+*Meta:* two "obvious" builds, two verifications, two course-corrections — the auto-linker shrank from
+"fill 1300 docs" to "39 edges, defer", and the c7 fix shrank from "fix the detector" to "a defensive
+label + retract a bad finding". Cheap checking keeps the work honest about what's real.
+
+== Round 22 (2026-06-09) — M6 scoped: benchmark breadth + agent-task-success
+
+Returned to the headline mission (prove aden matches/surpasses the retrieval leader, honestly). Scoped
+M6 with a 5-agent research workflow (repo-set · task-success · query-scaling · comparability →
+synthesis), ground-truthed against the live harness and verified commands (`understand --budget --json`
+exists; `aden bench` does *not*). Full scope:
+m6-execution-scope.adoc. Key decisions:
+
+* *Carve, don't boil the ocean.* The threads over-scoped (24 repos, ~4k queries, 5 tasks, a Rust `aden
+  bench`). The plan instead is the *smallest end-to-end slice that yields one real, honest number*:
+  `gen_queries.py` (commit→single-file) on *kin-openapi* → spot-check → existing `eval_corpus.py` →
+  first new-repo Recall@K. ~1 week, no agent harness yet, harness already works.
+* *Corpus = ~24 repos, each scoped to a sub-tree* (single-target ground truth stays authorable, mirrors
+  the T3 `cli/src` precedent), tagged memo-risk; 3-repo pilot first (rustfmt/Rust, kin-openapi/Go,
+  uno/C# — deliberately lower-star to dodge pretraining saturation).
+* *Query authoring = commit-message→single touched file* (the real bottleneck; ~2× hand-authoring) with
+  a non-negotiable manual spot-check gate whose pass-rate is *published next to the recall*. Hard
+  anti-overfit line: the sanity `aden search` may only *flag* weak labels, never auto-delete them — a
+  genuine miss must survive into the published miss count (the ADR-005 reverse-fit trap).
+* *Agent-task-success = T1 locate / T2 explain / T3 blast-radius*, each mapped to a verified command,
+  scored 1.0/0.5/0.0 against human gold, vs baselines B0 no-context + B1 raw-grep. The headline isn't
+  just success — it's *success at lower token spend than dumping grep output* (mean context tokens is a
+  first-class published number).
+* *Runner = `scripts/bench.py` (Python) first*, not a Rust subcommand (zero measurement value, gates the
+  first number behind plumbing). Emits JSON + a markdown table with caveats *inline* and
+  cold-build/cold-embed/reindex/warm as *separate rows*.
+* *Honesty is the product here:* external corpora only, params hardcoded per ADR-005 (never tuned to
+  these labels), reproducibility stated as the advantage over CQS's higher-but-unpublished headline.
+
+Next concrete step: build `scripts/gen_queries.py` Stage 1 on kin-openapi and produce the first
+external-repo recall table — then show it before anything else.
+
+== Round 23 (2026-06-09) — M6 build-first slice: first new-repo number + the gate earns its keep
+
+Built the smallest end-to-end slice from the M6 scope and got a real number. New
+`scripts/gen_queries.py` (commit-message → single touched file; reusable `--repo/--scope/--ext/--max`;
+never runs aden, so it can't reverse-fit). Cloned `getkin/kin-openapi`, scoped to `openapi3/`.
+
+* *First external-repo number* (BM25, debug bin): 30 auto-generated candidates → *R@1 0.20*, R@20 0.37
+  — low. *Spot-check, not despair:* searched one miss and found the cause immediately — the query
+  _"**Add** content-type wildcard support to validation"_ got swamped by BM25 matching the changelog
+  verb "Add" (→ `AddRoute`/`AddOperation`…), and its noun "validation" points at the validator, not the
+  touched `content.go`. Auto-cleaning (stripping verbs) *hurt* (lost BM25 signal). The real fix is the
+  *manual spot-check gate*: 8 of 30 subjects describe a cross-cutting effect that lives in another file
+  → excluded (*73% pass rate, published next to the number*).
+* *Validated subset (22 labels): R@1 0.20 → 0.273, R@20 0.37 → 0.50, misses 19 → 11.* The gate is
+  *load-bearing* — raw auto-labels are not publishable; culling 8 noisy ones is a +37%-relative R@1
+  swing. Validated BM25 (0.273) lines up with the t3-cli BM25 baseline (0.229). Recorded with caveats
+  in `eval-sets/README.md` (`ed25677`).
+* *Method finding for the corpus scale-up:* commit-subject labels are ~73% usable on this repo; the
+  spot-check is mandatory and the cost is real (~the bottleneck the scope flagged). Worth piloting the
+  doc-comment→file secondary source on a repo where it's denser, to see if it yields cleaner queries.
+
+*Then the actual claim — BM25 vs hybrid* (`target/release/aden --features dense` + bge-small, gen re-run
+per mode). On the 22 validated labels: *R@1 0.273 → 0.364 (+33% rel), R@5 +43%, R@10 +50%, R@20 0.50 →
+0.636, MRR +29%, misses 11 → 8* (`f14ef75`). The dense lift *generalises to a third independent repo*,
+consistent with t3-cli (R@1 +62%) and Linux (+35%) — exactly the "honest win that widens with
+unfamiliarity" story. So the M6 build-first slice is *complete*: a reusable query pipeline, the gate
+proven load-bearing, and a real BM25-vs-hybrid number on a new corpus. Per prefs: nothing pushed.
+
+== Round 24 (2026-06-09) — M6 pilot complete: 3 repos, 3 languages, one honest pattern
+
+Ran rustfmt (Rust) + uno (C#) through the same pipeline (`f62f32b`). Validated-set BM25 vs hybrid:
+
+* kin-openapi (Go, `openapi3/`): R@1 0.273 → *0.364* (+33%), R@20 0.50 → 0.64
+* rustfmt (Rust, `src/`): R@1 0.095 → *0.191* (+100%), R@20 0.24 → 0.29
+* uno (C#, `Uno.UI/Controls`): R@1 0.150 → *0.150* (flat), R@20 0.20 → 0.30
+
+*Hybrid ≥ BM25 on all three* (plus t3/Linux) — the dense lift reproduces across Go/Rust/C#, strongest
+where BM25 is weakest. *The real pilot finding is about the method, not aden:* absolute recall tracks
+*corpus/method fit*. The commit→file query method shines on *domain-named* files (kin-openapi:
+`schema.go`/`parameter.go` ↔ subjects that name the type) and struggles on *platform/concern-named*
+churny ones (uno Controls: platform renderers + ambiguous `.iOS`/`.Android` variants; rustfmt:
+behavioural subjects ↔ generic `expr.rs`). uno Controls was a poor sub-tree pick — a logic module
+(`DataBinding`) would likely fare better. So *sub-tree selection is a first-class corpus decision*, and
+the pilot surfaced it *before* paying for 24 repos — exactly its job. Spot-check pass rates 66–73%
+(corpus-dependent, all published next to the numbers).
+
+*M6 status:* the build-first slice + pilot are done and honest. The dense advantage generalises; the
+query-authoring method has a known fit-dependence to design around. *Next:* `scripts/bench.py` to emit
+the comparable JSON+markdown over the pilot, then scale query-gen across the corpus picking
+domain-named sub-trees, then the agent-task-success axis. Nothing pushed.
+
+== Round 25 (2026-06-09) — bench.py built, and it caught a gen determinism bug
+
+Built `scripts/bench.py` (`675cc66`): runs the corpus through `eval_corpus.py` for BM25 + hybrid,
+times cold build separately, emits a comparable JSON + markdown report (caveats inline, cold/warm
+separated, spot-check% + memo-risk per repo). It worked — and the *first thing it did was catch a real
+defect*: **`aden gen` is not deterministic.**
+
+Isolated rigorously (the session's verify-before-believing, applied to my own benchmark): two
+consecutive BM25 bench runs differ (kin-openapi R@1 0.273 vs 0.318); but `search` is deterministic
+(gen-once + eval-3× → byte-identical), and the BM25 sorts already tie-break on anchor. Not cross-mode
+store contamination either (fresh-store gens *still* differ). The smoking gun: gen's `Stored aden://…`
+lines come out in a *different file order each run* (parallel processing). The indexed *set* is stable,
+but per-file aggregate doc lengths / BM25 `avg_doc_length` shift with completion order → borderline
+rankings move ~±0.05 recall. Same class as the 2026-06-08 `detect_communities` sort-for-determinism fix.
+Full diagnosis + the focused fix (canonicalise entry/symbol order before building the index; regression
+test on index stats) in gen-determinism-defect.adoc.
+
+*This is the benchmark earning its keep:* the highest-value thing eval infra can do is find a
+correctness bug, and it found one on day one. `bench.py` + `eval-sets/README` now carry a ±0.05 caveat;
+the BM25→hybrid *gap* is robust to the wobble, the absolute decimals are not. *Next, high-value +
+bounded:* the gen-determinism fix — then re-run the pilot for stable numbers, then the agent-task-
+success axis. Nothing pushed.
+
+== Round 26 (2026-06-09) — gen-determinism: 2 of 3 causes fixed (diff the cache, not the source)
+
+Fixed the gen non-determinism `bench.py` found (`2b7554f`). The breakthrough was *diffing the
+serialized `index-cache.json`* between two clean gens instead of guessing (and, per the user's nudge,
+using aden's own `list`/`search` + the cache diff rather than blind grep). Three causes:
+(1) `collect_store_entries` used `HashMap::into_values()` → fixed by sorting `(anchor, source_file)`;
+(2) *the dominant one* — the indexed contract text carried a wall-clock `:last-verified:` *timestamp*,
+so every gen tokenised a different date into the postings (2126/2138 docs differed); fixed by
+`index_text()` stripping volatile metadata before indexing (stays in the store, out of the index);
+(3) `ingest` dedup ("first wins") order-sensitivity → fixed by sorting `parsed`. Index now byte-identical
+*except* a tiny residual: `doc_lengths` differs for ~2/2138 anchors, `avg_doc_length` by ~0.005.
+*Residual root (separate, documented):* basename-anchor collisions — `openapi2/helpers.go#copyURI` and
+`openapi3/helpers.go#copyURI` share an anchor; the store is anchor-keyed, so gen's parallel writes pick
+the survivor last-write-wins. Needs deterministic collision-resolution in gen Phase 1 or dir-qualified
+anchors (research note has both). Recall wobble now ~±0.02 (was ±0.05); R@1/R@20 largely stable. 103
+aden-index tests green; nothing pushed. *Process win:* two false starts before the cache-diff pinned it
+— verify the artifact, don't theorise.
+
+== Round 27 (2026-06-09) — gen+search determinism FULLY fixed (5 causes)
+
+Closed the determinism chain. After fixing gen's index *stats* (Round 26), recall STILL wobbled ±1
+rank — and the paradox (identical `doc_lengths`/`avg`/posting-sets, different recall) proved it wasn't
+gen at all. Traced via the per-query diff to two borderline queries flipping by one rank, then to the
+last non-deterministic field: `emit_document` iterated `doc.attributes` (a HashMap) in arbitrary order.
+That text is what the index *tokenises*, so unstable order perturbed tokenisation enough to flip a
+near-tie. *Fix (`9da0bcf`):* sort attributes (and block attributes) by key. *Result: retrieval is now
+fully deterministic* — 5 fresh gens of kin-openapi give byte-identical recall (R@1 0.2727, R@5 0.3182,
+R@20 0.4545, MRR 0.3055); rustfmt likewise. (Cache *file* bytes still vary — serde HashMap key order —
+but the data + recall are identical; cosmetic.)
+
+*Full chain (all fixed):* (1) wall-clock `:last-verified:` in indexed text; (2) `HashMap::into_values`
+in `collect_store_entries`; (3) order-sensitive `ingest` dedup; (4) parallel store-write anchor-collision
+race; (5) `emit_document` attribute order. The benchmark `bench.py` built earlier did its job end-to-end:
+found a real correctness bug and drove it to a full fix. 103 aden-index + emit/cli tests green.
+
+*Canonical numbers (`2cf9fa7`):* re-ran the pilot via `bench.py` on the deterministic build — recall is
+now byte-stable (5 fresh gens identical), so these are reproducible, not ±0.05 noise:
+kin-openapi (Go) BM25 R@1 0.273 / Hybrid 0.409 (+50%); rustfmt (Rust) BM25 R@5 0.143 / Hybrid 0.238
+(+67%); uno (C#) BM25 R@20 0.150 / Hybrid 0.300 (+100%). *Hybrid ≥ BM25 on all three* — the dense lift
+reproduces across Go/Rust/C#. Stale "±0.05 / not deterministic" caveat replaced everywhere with the
+deterministic-as-of-9da0bcf statement. Nothing pushed.
+
+== Round 28 (2026-06-09) — corpus to 5 languages; branch is release-ready
+
+Scaled the eval corpus to *5 repos / 5 languages* (`99c2107`): added Python (flask, `src/flask`) and
+TypeScript (TanStack/query, `query-core/src`), domain-named sub-trees per the pilot's fit finding.
+Canonical, reproducible (deterministic build): *hybrid ≥ BM25 on every one* — kin-openapi (Go)
+0.273→0.409 R@1, rustfmt (Rust) R@5 +67%, uno (C#) R@20 +100%, flask (Python) R@20 +25%, tanstack (TS)
+R@1 +100% / R@20 +100%. A clean, reproducible cross-language result — the headline retrieval claim,
+demonstrated across Go/Rust/C#/Python/TS.
+
+*Release-readiness (this branch, `feat/viz-export`, 41 commits ahead of main, NOT pushed):* default
+build clean; full workspace tests green (0 failures); zero *new* clippy warnings (1 pre-existing in
+untouched aden-parse); working tree clean except the deliberately-staged ADR-005 docs. The release is a
+cohesive story: *the interactive graph viewer (`viz`/`view`) + the `Contains` correctness fix +
+reproducible-retrieval determinism pass + a cross-language hybrid-vs-BM25 benchmark*. Recommend: ship
+this branch, keep ADR-005 as its own branch/PR, defer the remaining ~19 corpus repos + the
+agent-task-success axis to post-release. *Awaiting explicit approval before any push.*
+
+== Round 29 (2026-06-09) — release fix + config-TUI captured
+
+Pre-push catch: the staged ADR-005 docs got swept into `2056b33` (a `git commit` commits the whole
+index). Fixed — moved ADR-005 to its own `adr-005-footprint` branch and removed it from the release;
+`feat/viz-export` net diff vs main is now clean of ADR-005. Final ci-check green, 47 commits, working
+tree clean. *Captured* a new idea — a config runner/TUI to toggle runtime preferences (view auto-open,
+default mode/editor, persistent project) — as a post-release item that pairs with ADR-005's
+`.aden/config.toml` (research: config-runner-tui.adoc). Key distinction logged: build features
+(view/dense/watch) are compile-time and can't be toggled live; the TUI manages *preferences*, not
+the binary's features.
+
+== Round 30 (2026-06-09) — viewer panel pointer-event fixes (post-release polish)
+
+User-testing surfaced real viewer interaction bugs: the side panel leaked pointer events to the
+graph — clicking/hovering the panel selected nodes *beneath* it, and moving the cursor toward the
+panel made the highlight 'snap' across the nodes it crossed. Root causes: `#panel` had no `z-index`
+over the full-viewport canvas, and `onNodeHover`/`onClick` had no "pointer is over UI" guard. Fix
+(`36299d2`): `#panel` z-index 8 + an `overUI` flag (pointerenter/leave on panel/controls/search/
+replaybar/filter/fit/syn/back/act) that makes the graph ignore hover-highlight + node-click while the
+pointer is over any overlay. Also fixed a *locked density slider in replay* (`7206c5c`): `idVisible`
+short-circuited on growMode, ignoring the density filter — now the reveal gate and density compose. (Release branch `feat/viz-export` is the viewer release, so this lands
+in it pre-push.) User endorsed *point-in-time graph diffing* as a wanted future feature — already
+captured in `aden-as-self-diagnostic.adoc` (`aden graph diff A B`). Next: a viewer/code optimization
+pass.
+
+== Round 31 (2026-06-09) — blog post: "The Graph That Audited Itself"
+
+Wrote Part 2 of the Aden series for the blog (`the blog repo`, Hugo + AsciiDoc page bundle:
+`content/posts/the-graph-that-audited-itself/`). Drew the narrative from this stretch (Rounds 15-30):
+the viewer build → pointing aden at itself → the Documents==PartOf / mod-unknown self-audit finds →
+the `Contains` split → the bench.py determinism catch → 5-cause hunt (verify the artifact) → the
+release gauntlet → the "aden as self-diagnostic" thesis. *Appealing visuals from adoc tooling:* two
+live `[.mermaid]` graph diagrams (a real `aden viz` connectivity slice of `cmd_view`, + a Documents→
+Contains before/after) and a 5-language hybrid-vs-BM25 results table. Added it to the `aden` series
+index. Hugo build clean, post + mermaid render. *Correction:* the blog lives in rioplay.dev (Hugo),
+NOT aden-devlog — removed a misplaced draft I had put under aden-devlog/blog. Not committed/published
+(awaiting review).
+
+== Round 32 (2026-06-09) — v0.2.0 SHIPPED
+
+The release went out. Final prep sequence on `feat/viz-export` (recorded here for completeness —
+Rounds 29–30 covered it only obliquely): `132f8d3` legal+security (full force-graph MIT notice in
+NOTICE; hardened `view`'s HTML against `<script>` injection from indexed content), `3694380` release
+prep (last doc/honesty gaps), `10aaaf5` CHANGELOG for the interactive-graph + determinism release,
+`0d3eecb` viewer UX — *default to the present graph*, timeline controls only appear on ▶ replay
+(the right default: most opens are "show me the graph now", not "replay history"), then the version
+bump (`fd3230f` + `eaf7b41` internal dep pins + CLI version). With the Round-30 pointer-event fixes
+on top, *tag `v0.2.0` sits at `7206c5c`* — tagged, *pushed to origin* along with main, release build
+triggered via `release.yml`. *ADR-005 went up as its own PR (#18) and was MERGED* at 07:48 — the
+proposal is accepted, so the footprint/opt-in-tracking *implementation* is now unblocked (it was
+"no code until accepted"). The 0.2.0 story as released: interactive graph viewer (`viz`/`view`) +
+`Contains` correctness split + reproducible-retrieval determinism pass + 5-language benchmark.
+
+== Round 33 (2026-06-09) — blog published; the blog becomes an aden corpus
+
+Part 2 (*"The Graph That Audited Itself"*, Round 31 draft) was reviewed, committed (`ae1c236`) and
+*published* to rioplay.dev, with glossary support commits (Anchor, Context assembly, Determinism,
+Dogfooding, Contains, Graph viewer terms; cross-linked to the post). Then an evening session turned
+the dogfooding loop on the blog itself: *added an aden knowledge-graph visualization to the blog*
+(`4ccb5c3`), *converted post links from Hugo syntax to AsciiDoc `xref:` so they become real graph
+edges* (`0147d1d`), scoped aden's indexing to content only (`9ad5c4d`), and fixed glossary anchors
+to AsciiDoc anchor syntax (`b10cdbf`). The blog is now itself an aden-indexed corpus that renders
+its own graph — the self-audit thesis, applied one level up. All pushed; rioplay.dev is in sync
+with origin.
+
+== Round 34 (2026-06-09) — post-release: graph-model wave on main (ADR-006/007)
+
+Six substantive commits landed on main after the release (evening, *not yet pushed*):
+
+* *`impact-diff` direction bug fixed* (`4729d89`) — blast radius was traversing *dependencies*
+  (what the changed code calls) instead of *dependents* (what calls the changed code). A real
+  correctness bug in a shipped feature: the whole point of blast radius is "who breaks if I change
+  this", which is the reverse direction.
+* *MCP↔CLI drift closed* (`a73dff2`) — reverse parity tests (every CLI capability must have an MCP
+  counterpart, and vice versa) + the missing `viz` MCP tool.
+* *Typed-edge activation, wave 1* (`2cc63de`) — `Tests`, `Implements`, `Mutates` edges activated in
+  the graph.
+* *ADR-006: prose graph references* (`9a31771`, `docs/adr-006-prose-graph-references.adoc`) — prose
+  `<<refs>>` become `RelatesTo` edges, with an honest `check`. This is the durable code↔prose
+  direction the Round-21 auto-linker deferral pointed at — edges derived from refs the author
+  actually wrote, not inferred mentions.
+* *ADR-007: typed-edge model* (`c6c3b54`, `docs/adr-007-typed-edge-model.adoc`) — the edge-type
+  model and an *activation policy* governing how new edge types get turned on (the framework the
+  `Contains` split and wave 1 retroactively fit into).
+* *`ask` conceptual routing* (`021f7a3`) — conceptual questions route to curated prose instead of
+  code anchors; new `ask --explain` surfaces the routing decision.
+
+Plus `1b9eb91` — *CLA v1.0*, adversarially reviewed, CONTRIBUTING/LICENSE aligned.
+
+*Housekeeping flag:* local main is ahead 7 / behind 3 vs origin. The behind side is the ADR-005
+PR-#18 merge plus an `ecfd9b3` CLA commit that `git cherry` confirms is *patch-equivalent* to local
+`1b9eb91` (the CLA landed on origin separately). So a `git pull --rebase` should drop the duplicate
+cleanly, leaving 6 real commits to push.
+
+== Round 35 (2026-06-09) — in flight: `ask` density & immediacy (uncommitted)
+
+The newest thread, in the working tree (~564 insertions across 5 files, uncommitted): *`ask` routes
+correctly but delivers almost nothing* — the design record (research:
+`ask-density-and-routing.adoc`) observed `ask` assembling *22 of 4115 budgeted tokens (0.5%
+density)* after routing to the right anchor. Two-sided response in progress:
+
+* *Acceptance harness first:* new `scripts/eval_ask_density.py` drives the real binary end-to-end
+  per query (`ask --explain`), parses routed vs final anchor, and scores *routed-hit / anchor-hit*
+  (making fallback damage visible), *density* (substantive tokens ÷ effective budget), *immediacy*
+  (deterministic must-contain substrings, no LLM judge), and *budget honesty*. Gates from the
+  design record: mean density ≥ 0.50, per-query floor ≥ 0.15, immediacy ≥ 12/15, honesty 15/15,
+  anchor-hit ≥ 12/15 — acceptance criteria, not diagnostics.
+* *Fix side (WIP in `query.rs`/`traverse.rs`/`cache.rs`):* the thin-stub check moves from raw byte
+  length to a *substantive-token estimate* (strips blank/`---`/`//`-meta/bare-title/`calls:` lines
+  — raw bytes rewarded callee tables and bare titles, the "bulk-as-substance" trap, letting
+  near-empty assemblies pass for substantial; the estimator mirrors the eval's definition so the
+  floor checked in code is the metric the gates measure). The `mod-project` broadening becomes an
+  *escalation ladder* in `cmd_ask` with a budget-scaled floor (`max(150, budget/10)`), and traverse
+  grows a `hydrate_root` option.
+
+Not committed; the gates haven't been run to green yet — that's the resume point.
+
+== Round 36 (2026-06-09) — ask density/immediacy work COMMITTED
+
+The Round-35 WIP landed as `6d20c6b` (23:06; 876 insertions incl. the harness), structured as three
+fix layers:
+
+* *F1 — render fixes* (`traverse.rs`): signature tables get a doc-title fallback name (the absent
+  Name row made every signature render to *nothing*); the leading docstring paragraph and the
+  signature table are exempt from intent block-filters (a List/Usage filter was deleting the only
+  substantive prose a code node has); callee tables capped at `MAX_CALLEES=12` so hub nodes stop
+  burning the budget on call-graph scaffolding; embedded newlines stripped from table cells;
+  truncated nodes charge their cost before the budget break.
+* *F2 — budget-aware source hydration* (`traverse.rs`/`cache.rs`): when summaries leave most of the
+  budget unspent, `hydrate_root` packs included nodes with their *actual source lines* —
+  `source_hash`-verified (stale store → a note, never stale source), per-node caps, deterministic
+  BFS order. Callers fold in as a depth-1 frontier (incoming `Calls`/`Uses`, reversed in the
+  ephemeral graph — outgoing-only traversal starved at leaves); the hub check is degree-gated
+  (`HUB_DEGREE_CAP=32`) so a real symbol in a small crate's `lib.rs` isn't mistaken for an index node.
+* *F3 — escalation ladder* (`query.rs`/`cmd_ask`): three non-anchor-changing rungs for an underfull
+  anchor — (a) re-render without the intent filter, (b) fold callers, (c) depth +1 — *before*
+  community broadening, which now packs members by *BM25 query-relevance, not degree* (the degree
+  pick was re-creating M14's hub-over-leaf bias at the fallback layer) and never fires for an
+  explicit `--from`. The routed anchor always stays primary and the summary stays truthful.
+
+Plus `scripts/eval_ask_density.py` (15-case end-to-end eval with the Round-35 gates). The commit
+message doesn't record a gate run — *verifying the gates green is the open follow-up*. main is now
+ahead 8 / behind 3 of origin.
+
+== Round 37 (2026-06-09) — main rebased onto origin; duplicate CLA dropped
+
+The reconcile happened: `git rebase` of main onto origin/main completed (one conflict stop in
+`generate.rs`/`types.rs`, resolved). As predicted by the `git cherry` check, the patch-equivalent
+local CLA commit dropped cleanly; the seven real commits replayed with *new SHAs* — main is now
+*ahead 7 / behind 0*, working tree clean. SHA remap (old → live):
+`4729d89`→`f410cee` (impact-diff), `a73dff2`→`da2efd3` (MCP parity), `2cc63de`→`c7c956b` (wave-1
+edges), `9a31771`→`5d0054c` (ADR-006), `c6c3b54`→`f33e964` (ADR-007), `021f7a3`→`c97467e` (ask
+conceptual), `6d20c6b`→`ebf6917` (ask density). Earlier rounds keep the old SHAs as written
+(journal stays a journal); the roadmap now carries the live ones. *Push still pending.*
+
+== What came next
+
+Continued in link:/devlog/2026-06-10/[2026-06-10]: docs/code sync, eval gate root-causing and fixes,
+all five gates green (`ab4df2a`). Push pending user validation.
+
+. *ADR-005 implementation* — unblocked (PR #18 merged).
+. *M6 agent-task-success axis* — T1/T2/T3 vs no-context/grep baselines.
+. *Stale branch decision* — `mcp-tool-descriptions` (`bb77d75`, 2026-05-30): rebase-and-merge or drop.
+
+'''
+[.devlog-foot]
+This is a lightly cleaned entry from the raw link:/devlog/[Aden devlog]. The polished stories that draw on these days live in the link:/series/aden/[Aden series].

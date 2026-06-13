@@ -1,0 +1,96 @@
+---
+title: "The Shape the Graph Already Had"
+slug: "the-shape-the-graph-already-had"
+date: 2026-06-07
+lastmod: 2026-06-07
+draft: false
+summary: "Community detection does not know your file structure. It has a graph: nodes and edges. It runs Louvain — maximizing modularity — and reports which symbols are more connected to each other than to the rest. On Aden's own code the result confirms the crate structure. On a TypeScript codebase it has never seen, it separated the CLI from the documentation site. The differentiator is not the algorithm itself — Louvain is published work from 2008 — it is that the result is deterministic and wired into ask's fallback."
+description: "Aden's community detection: what Louvain finds on Aden's own code versus a foreign TypeScript codebase, how determinism was imposed on an inherently non-deterministic algorithm, and how functional communities rewired the ask fallback."
+series: ["Aden"]
+categories: ["Aden"]
+tags: ["aden", "ai-tooling", "developer-tools", "knowledge-graph", "community-detection", "graph-algorithms", "rust"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+A call graph has structure that its labels do not reveal. If you lay out which symbols call which — without looking at file paths, modules, or package names — calls cluster. High-traffic connections between a small set of nodes; sparse connections crossing cluster boundaries. That structure is already in the graph. link:/glossary/#_community_detection[Community detection] is the algorithm that reads it.
+
+[NOTE]
+.The short version
+====
+`aden communities` groups symbols into functional clusters using deterministic multi-level Louvain, a published algorithm (Blondel et al. 2008) that maximizes modularity without being told the groupings in advance. On Aden's own well-factored code, the result confirms the crate structure — no surprise, but a verifiable baseline. On a TypeScript codebase it had never seen, it correctly separated the CLI from the documentation site. The key engineering decision: link:/glossary/#_determinism[determinism], imposed by sorting nodes by anchor before traversal and using lowest-id tie-breaking. The same graph always produces the same communities. The Leiden refinement (Traag 2019, which adds a connectivity guarantee) is a documented future enhancement.
+====
+
+== What the algorithm does
+
+link:/glossary/#_community_detection[Community detection] does not know your directory structure or your module hierarchy. It operates on a graph: nodes (symbols) and edges (calls, references, imports). The Louvain algorithm, described by Blondel et al. in their 2008 paper "Fast unfolding of communities in large networks," assigns every node to a community so as to maximize *modularity* — a measure of how dense within-community connections are compared to what you would expect from a random graph with the same degree sequence.
+
+The process is multi-level. In the first pass, every node starts in its own community. Nodes are visited one at a time; each is tentatively moved to the community of one of its neighbors and the modularity gain is computed. If moving increases modularity, the move is accepted. The pass repeats until no further gain is possible. Then the communities are coarsened into super-nodes and the whole process repeats at a higher level. The algorithm terminates when no coarsening produces further modularity gain.
+
+The output is a partition: every symbol assigned to a community. Aden derives a human-readable label for each community from the directory and project structure of the anchors it contains, so the cluster names read as subsystem names: `aden-graph`, `aden-index`, `www`, `cli`.
+
+The resolution parameter γ controls how finely the graph is cut. At γ = 1 (the default), Louvain finds subsystem-scale groups. Higher γ produces finer clusters. Neither is correct in the abstract; the right granularity depends on what you want to learn.
+
+== On Aden's own code
+
+The honest result: on Aden's code, at γ = 1, the communities confirm the crate structure.
+
+`aden-graph` — the symbols that build and traverse the link:/glossary/#_knowledge_graph[knowledge graph] — clusters together. `aden-index` — the symbols behind link:/glossary/#_bm25[BM25] ranking and retrieval — clusters together. `aden-cli` — command dispatch — clusters together. These are also the crate boundaries. The algorithm did not see those boundaries; it found them by following call patterns.
+
+This is the expected result on a well-factored codebase with clear module interfaces and minimal cross-cutting. Community detection on such a codebase confirms a structure you already knew. That confirmation is not useless — it is a verifiable baseline, and a baseline is load-bearing when the architecture drifts. When the communities no longer match the expected structure, the deviation is the signal.
+
+On Aden's own code, the communities are not surprising. Reporting that honestly is the starting point for understanding where they are.
+
+== On a foreign TypeScript codebase
+
+The more informative test was on a codebase Aden had never seen: https://github.com/t3-oss/create-t3-app[create-t3-app^], approximately 10,000 lines of TypeScript across 177 files.
+
+There was no prior knowledge of the architecture. The communities algorithm saw a graph of TypeScript symbols: React components, Zod schemas, CLI flag parsers, utility functions, documentation site components. Without consulting package.json or directory names, the partitioning separated the `cli` package from the `www` documentation site — the two natural divisions of the repository.
+
+This is the case where community detection adds something: a foreign codebase, no labels, and the graph topology surfaces the structure. The result was two legible clusters with human-readable names derived from their anchor paths. Aden is written in Rust; the algorithm operates on the edge data of any language's call graph.
+
+== The determinism problem
+
+Louvain as published is not deterministic. Node traversal order, tie-breaking when two moves produce equal modularity gain, and the order in which super-nodes are formed after coarsening all affect the final partition. On a 300-node graph, two runs with different traversal orderings produce meaningfully different clusters. The same code, on the same machine, run twice, can partition differently.
+
+This matters for any use where the cluster assignments are compared across time — commits to a version-controlled community file, comparison between `aden regen` runs, reporting on architecture drift. A non-deterministic community tool produces a moving target; the assignments cannot be tracked because they change without any change in the underlying code.
+
+Aden imposes determinism at every decision point in the algorithm:
+
+* Nodes are sorted by anchor — a stable string key — before any traversal begins.
+* Community assignments are stored in a `BTreeMap`, which orders by key rather than by insertion or hash order.
+* When two moves produce equal modularity gain, the node is moved to the community containing the lowest anchor ID among the tied options.
+
+The result: the same graph, run on different machines or on different days, produces the same partition. This is not a default property of Louvain; it is engineered.
+
+The Leiden refinement (Traag, van Eck, and Waltman, "From Louvain to Leiden: guaranteeing well-connected communities," 2019) adds a connectivity guarantee that Louvain lacks: communities in Leiden are always internally connected, which Louvain does not ensure. The Leiden step is a documented future enhancement. The current implementation is honest about being Louvain-class.
+
+== How communities rewired ask
+
+The practical integration was in `aden ask`'s fallback path. link:/posts/the-empty-context-window/[The empty context window] covers the problem of thin assembly in depth; the relevant piece here is what happens when a question routes to a symbol with very little context to assemble.
+
+The old fallback: broaden to `mod-project`, a flat dump of all module-hub anchors. This is breadth without selectivity — the model receives an index of every top-level module, which is rarely what a specific question about an obscure internal function needs.
+
+The new fallback: detect communities, find the one containing the matched anchor, assemble from that community's hub — the highest-degree real symbol in the cluster, skipping synthetic `mod-*` nodes. The model receives the subsystem where the anchor lives.
+
+[quote]
+____
+The useful answer to a question about an obscure internal function is usually the broader subsystem it belongs to, not a flat list of everything the project exports.
+____
+
+Community detection on the fallback path runs only when the primary assembly would come back thin. The happy path — a question that routes to a well-connected anchor with real context — is unchanged. The community fallback is a last-resort escalation rung, not a default.
+
+For the specific thin-anchor case that triggered this work (the `detect_node_type` symbol that had a rare-verb name matching unrelated queries), the community fallback resolved it: instead of a module-hub dump, the fallback assembled from the `aden-graph` subsystem, where the orphan-scanning logic actually lives.
+
+[.text-center]
+_This work is from link:/devlog/2026-06-07/[the devlog for 2026-06-07], a session that also produced link:/posts/what-youre-about-to-break/[impact-diff] and the hybrid retrieval stack. More in the link:/series/aden/[Aden series]: the connections below are compiled from this blog's own knowledge graph._
+
+[.sources]
+== Sources
+
+. Louvain community detection: Blondel, Guillaume, Jean-Loup Guillaume, Renaud Lambiotte, and Etienne Lefebvre. "Fast unfolding of communities in large networks." _Journal of Statistical Mechanics: Theory and Experiment_, 2008.
+. Leiden refinement: Traag, V.A., L. Waltman, and N.J. van Eck. "From Louvain to Leiden: guaranteeing well-connected communities." _Scientific Reports_, 2019.
+. Aden source: the https://github.com/RioPlay/aden[Aden repository^], specifically `crates/aden-graph/src/communities.rs` (Louvain implementation) and `crates/aden-cli/src/commands/communities.rs` (CLI surface and label derivation).
+. The xref:../../glossary.adoc[site glossary] defines and sources every term used above. This site is built with https://asciidoctor.org[Asciidoctor^].

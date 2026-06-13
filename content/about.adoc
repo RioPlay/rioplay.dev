@@ -48,6 +48,26 @@ Getting an AI to help build something genuinely new, instead of a slightly rewor
 
 I treat AI as exactly that, a tool, only as useful as the person wielding it. It did not replace me. It took the laborious, time-consuming work off my plate so I could spend my attention on the decisions that actually needed a person. Used that way it is the most leverage I have ever had as one person, and I would rather you see what it let me build than dismiss it for the label.
 
+== What Aden is built on
+
+Aden is a Rust project and it does not exist in a vacuum. The full attribution — all 350+ transitive dependencies, each with its license — is in https://github.com/RioPlay/aden/blob/main/NOTICE.md[NOTICE.md^]. A few names are load-bearing enough to name here.
+
+*Language foundation.* Aden's whole premise — that documentation can be a plain-text, referential, machine-queryable format — rests on https://asciidoc.org[AsciiDoc^], which **Stuart Rackham** created in 2002. The original insight that a document could have a regular grammar, cross-references, and conditionals, and still be readable as text, is exactly what lets Aden treat docs as a graph instead of opaque files. **Dan Allen** and the https://asciidoctor.org[Asciidoctor^] project (and the AsciiDoc Working Group at the Eclipse Foundation) carried that forward into the processor and language spec in use today. This blog is also written in AsciiDoc; the substrate is the same.
+
+*Parsing and search.* **Max Brunsfeld**, the https://tree-sitter.github.io/tree-sitter/[tree-sitter^] project, and the many per-language grammar authors bundled via https://github.com/kreuzberg-dev/tree-sitter-language-pack[tree-sitter-language-pack^] are why Aden can extract call graphs, signatures, and symbols across 300+ languages from a single compiled binary, with no runtime downloads. **Andrew Gallant (BurntSushi)** and contributors — the `regex`, `aho-corasick`, `memchr`, `walkdir`, and `ignore` crates — are what Aden's structure-aware grep, lint, and file discovery are built on.
+
+*Storage, graph, and data.* https://github.com/fjall-rs/fjall[fjall^] (LSM-tree embedded storage), https://github.com/petgraph/petgraph[petgraph^] (graph data structures), and **David Tolnay** and the https://serde.rs[serde^] community (`postcard`, `serde_json`, `serde_yaml`, `toml`). Content-hash freshness tracking is https://github.com/BLAKE3-team/BLAKE3[blake3^].
+
+*Async, parallelism, and CLI.* The https://tokio.rs[Tokio^] team, https://github.com/rayon-rs/rayon[rayon^] for data-parallel indexing, and https://github.com/clap-rs/clap[clap^] for the command interface.
+
+*Graph visualization.* https://github.com/vasturiano/force-graph[force-graph^] and https://github.com/vasturiano/3d-force-graph[3d-force-graph^] by **Vasco Asturiano** (both MIT), bundled fully offline in `aden view`. The interactive graph on this blog's link:/graph/[/graph/] page runs on the same library.
+
+*AI protocol.* https://github.com/modelcontextprotocol/rust-sdk[rmcp^], the Rust Model Context Protocol SDK from Anthropic and the MCP community, is how `aden mcp install` wires Aden's commands into an AI client as first-class tools.
+
+*Optional semantic embeddings.* The https://huggingface.co/BAAI/bge-small-en-v1.5[BAAI/bge-small-en-v1.5^] model (MIT, HuggingFace), with the https://github.com/sonos/tract[tract^] ONNX runtime and HuggingFace https://github.com/huggingface/tokenizers[tokenizers^], power the optional `dense` feature that fuses local embeddings with BM25 for natural-language queries. Fetched on demand, never bundled, fully offline once downloaded.
+
+If you maintain a project Aden depends on and feel under-credited, that is an oversight worth fixing — https://github.com/RioPlay/aden[open an issue^].
+
 == Elsewhere
 
 * GitHub: https://github.com/rioplay[github.com/rioplay^]
