@@ -31,18 +31,18 @@ That background shapes how I build. I come at software the way a sysadmin comes 
 
 This is a personal blog, not a single-topic one. I expect it to wander across whatever I am building, breaking, learning, or curious about: developer tooling, the projects I make, the occasional rabbit hole. The through-line is not a subject, it is the way I like to approach things.
 
-The reason it exists at all is xref:./series/aden/_index.md[*Aden*], a tool I have been building that turns a codebase into a queryable map for humans and AI agents. Aden is the first project I cared enough about to want to write it down and share it as I go, and once I started, a blog felt like the right home for the rest of my interests too.
+The reason it exists at all is link:/series/aden/[*Aden*], a tool I have been building that turns a codebase into a queryable map for humans and AI agents. Aden is the first project I cared enough about to want to write it down and share it as I go, and once I started, a blog felt like the right home for the rest of my interests too.
 
 A couple of corners worth knowing about:
 
-* The xref:./glossary.adoc[Glossary] defines recurring terms once and links out to their sources, so posts can stay readable without re-explaining the basics.
-* The xref:./archives.md[Archive] is the full index of everything published.
+* The link:/glossary/[Glossary] defines recurring terms once and links out to their sources, so posts can stay readable without re-explaining the basics.
+* The link:/archives/[Archive] is the full index of everything published.
 
 The site is built with Hugo and written in AsciiDoc, the same plain-text format Aden reads. I liked the idea of writing about the tool on the same substrate the tool is built on.
 
 == A note on AI
 
-Aden was built with heavy AI assistance, and I am not going to bury that. It is one of the more interesting parts of the story.
+Aden, this site, and the tooling behind it are all built with heavy AI assistance that I direct, and I am not going to bury that. It is one of the more interesting parts of the story. It is also how I work continuously, not a one-time trick. The directives, the fixes, and the calls about what ships and what gets thrown out stay mine.
 
 Getting an AI to help build something genuinely new, instead of a slightly reworded copy of what already exists, is not a matter of asking nicely. It took a lot of direction, correction, and plain stubbornness to bend the tool toward an idea it had no template for, and to hold the result to a standard I was happy to put my name on. The polish is not something the model handed me. It is the part I worked hardest on.
 
@@ -50,11 +50,11 @@ I treat AI as exactly that, a tool, only as useful as the person wielding it. It
 
 == What Aden is built on
 
-Aden is a Rust project and it does not exist in a vacuum. The full attribution — all 350+ transitive dependencies, each with its license — is in https://github.com/RioPlay/aden/blob/main/NOTICE.md[NOTICE.md^]. A few names are load-bearing enough to name here.
+Aden is a Rust project and it does not exist in a vacuum. The full attribution is in https://github.com/RioPlay/aden/blob/main/NOTICE.md[NOTICE.md^]: all 350+ transitive dependencies, each with its license. A few names are load-bearing enough to name here.
 
-*Language foundation.* Aden's whole premise — that documentation can be a plain-text, referential, machine-queryable format — rests on https://asciidoc.org[AsciiDoc^], which **Stuart Rackham** created in 2002. The original insight that a document could have a regular grammar, cross-references, and conditionals, and still be readable as text, is exactly what lets Aden treat docs as a graph instead of opaque files. **Dan Allen** and the https://asciidoctor.org[Asciidoctor^] project (and the AsciiDoc Working Group at the Eclipse Foundation) carried that forward into the processor and language spec in use today. This blog is also written in AsciiDoc; the substrate is the same.
+*Language foundation.* Aden's whole premise, that documentation can be a plain-text, referential, machine-queryable format, rests on https://asciidoc.org[AsciiDoc^], which **Stuart Rackham** created in 2002. The original insight that a document could have a regular grammar, cross-references, and conditionals, and still be readable as text, is exactly what lets Aden treat docs as a graph instead of opaque files. **Dan Allen** and the https://asciidoctor.org[Asciidoctor^] project (and the AsciiDoc Working Group at the Eclipse Foundation) carried that forward into the processor and language spec in use today. This blog is also written in AsciiDoc; the substrate is the same.
 
-*Parsing and search.* **Max Brunsfeld**, the https://tree-sitter.github.io/tree-sitter/[tree-sitter^] project, and the many per-language grammar authors bundled via https://github.com/kreuzberg-dev/tree-sitter-language-pack[tree-sitter-language-pack^] are why Aden can extract call graphs, signatures, and symbols across 300+ languages from a single compiled binary, with no runtime downloads. **Andrew Gallant (BurntSushi)** and contributors — the `regex`, `aho-corasick`, `memchr`, `walkdir`, and `ignore` crates — are what Aden's structure-aware grep, lint, and file discovery are built on.
+*Parsing and search.* **Max Brunsfeld**, the https://tree-sitter.github.io/tree-sitter/[tree-sitter^] project, and the many per-language grammar authors bundled via https://github.com/kreuzberg-dev/tree-sitter-language-pack[tree-sitter-language-pack^] are why Aden can extract call graphs, signatures, and symbols across 300+ languages from a single compiled binary, with no runtime downloads. **Andrew Gallant (BurntSushi)** and contributors are what Aden's structure-aware grep, lint, and file discovery are built on: the `regex`, `aho-corasick`, `memchr`, `walkdir`, and `ignore` crates.
 
 *Storage, graph, and data.* https://github.com/fjall-rs/fjall[fjall^] (LSM-tree embedded storage), https://github.com/petgraph/petgraph[petgraph^] (graph data structures), and **David Tolnay** and the https://serde.rs[serde^] community (`postcard`, `serde_json`, `serde_yaml`, `toml`). Content-hash freshness tracking is https://github.com/BLAKE3-team/BLAKE3[blake3^].
 
@@ -66,7 +66,7 @@ Aden is a Rust project and it does not exist in a vacuum. The full attribution �
 
 *Optional semantic embeddings.* The https://huggingface.co/BAAI/bge-small-en-v1.5[BAAI/bge-small-en-v1.5^] model (MIT, HuggingFace), with the https://github.com/sonos/tract[tract^] ONNX runtime and HuggingFace https://github.com/huggingface/tokenizers[tokenizers^], power the optional `dense` feature that fuses local embeddings with BM25 for natural-language queries. Fetched on demand, never bundled, fully offline once downloaded.
 
-If you maintain a project Aden depends on and feel under-credited, that is an oversight worth fixing — https://github.com/RioPlay/aden[open an issue^].
+If you maintain a project Aden depends on and feel under-credited, that is an oversight worth fixing: https://github.com/RioPlay/aden[open an issue^].
 
 == Elsewhere
 
@@ -79,5 +79,5 @@ If you maintain a project Aden depends on and feel under-credited, that is an ov
 
 [TIP]
 ====
-New here? Start with xref:./posts/introducing-aden/index.adoc[Introducing Aden]. It is the project that kicked all of this off, and it explains what I have been building, in about ten minutes.
+New here? Start with link:/posts/introducing-aden/[Introducing Aden]. It is the project that kicked all of this off, and it explains what I have been building, in about ten minutes.
 ====

@@ -3,6 +3,15 @@ locale = "en-us"
 title = "RioPlay's Blog"
 theme = "PaperMod"
 
+# Emit page-relative internal links (../posts/x/ rather than /posts/x/ or the
+# absolute production URL) so a built copy interlinks correctly when browsed
+# offline from any location: a local static server, or opening the files
+# directly over file://. Canonical, OG, sitemap, and RSS keep absolute URLs
+# (they use .Permalink, which relativeURLs leaves untouched), so SEO is intact.
+# Theme chrome that hardcoded absolute URLs is overridden under layouts/ to use
+# the relative helpers (relLangURL / .RelPermalink) so this setting can reach it.
+relativeURLs = true
+
 # Show drafts/expired? off for production builds
 buildDrafts = false
 buildFuture = false
@@ -75,6 +84,10 @@ pygmentsUseClasses = true
 # ---------------------------------------------------------------------------
 [params]
   env = "production"             # enables sitemap, robots, opengraph, schema, twitter cards
+  # Homepage feed + RSS = the writeups only. Without this, Hugo auto-picks the
+  # section with the most pages (devlog) and the actual posts never surface.
+  # The devlog stays reachable as its own "Timeline" nav item (/devlog/).
+  mainSections = ["posts"]
   description = "Notes on Aden, the things I build, and what I learn along the way, by RioPlay."
   keywords = ["Aden", "AI tooling", "developer tools", "knowledge graph", "Rust", "AsciiDoc"]
   author = "RioPlay"
@@ -97,7 +110,7 @@ pygmentsUseClasses = true
   # Clean home landing: short intro + social links (PaperMod "home-info" mode).
   [params.homeInfoParams]
     Title = "RioPlay"
-    Content = "I work in IT and tinker constantly. My main project right now is **Aden**, a referential context compiler that turns any codebase into a queryable knowledge graph. This is where I write about it, and about whatever else I happen to be building, breaking, or learning. Start with the [Aden series](/series/aden/) or browse the [glossary](/glossary/)."
+    Content = "I work in IT and tinker constantly. My main project right now is **Aden**, a referential context compiler that turns any codebase into a queryable knowledge graph. This is where I write about it, and about whatever else I happen to be building, breaking, or learning — all of it built with heavy AI assistance that I direct, correct, and hold to a standard I will put my name on. Start with the [Aden series](/series/aden/) or browse the [glossary](/glossary/)."
 
   [[params.socialIcons]]
     name = "github"
@@ -176,3 +189,12 @@ pygmentsUseClasses = true
     name = "Search"
     url = "/search/"
     weight = 60
+
+# Dev-server only: never let the browser cache the interactive graph. It is a
+# large static HTML that gets regenerated; without this, browsers serve a stale
+# copy (the "older render engine" problem) until a hard refresh.
+[server]
+  [[server.headers]]
+    for = "/graph/**"
+    [server.headers.values]
+      Cache-Control = "no-store, must-revalidate"

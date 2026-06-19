@@ -1,0 +1,246 @@
+---
+title: "Devlog: 2026-06-17"
+slug: "2026-06-17"
+date: 2026-06-17
+lastmod: 2026-06-17
+draft: false
+summary: "The day language stopped being something the model re-derives on every query and became a graph I compute once and look up. The log of building that lexical substrate: the whole dictionary brings the wrong senses, so I let the corpus redefine the relationships from real usage."
+categories: ["Devlog"]
+tags: ["aden", "devlog"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+The day language stopped being something the model re-derives on every query and became a graph I compute once and look up. The log of building that lexical substrate: the whole dictionary brings the wrong senses, so I let the corpus redefine the relationships from real usage.
+
+== The bet (why I'm pushing this)
+
+I'll put my name on this one directly, because it's the thesis the rest of
+aden has been quietly building toward and today is the day it came into focus.
+
+I'm Ernest Hamblen, RioPlay. The idea I keep circling: *today's AI spends most
+of its money and compute re-deriving things it already worked out a moment ago.*
+Every call re-embeds the same text, re-retrieves the same context, re-infers the
+same relationships between the same words. It does this stochastically, on a GPU,
+billed per token. That re-derivation is a treadmill, and I want aden to step off it.
+
+The bet is simple to state. The relationships *within* language (what words
+mean, how they connect, what overlaps with what) are mostly **stable**. They do
+not need a billion-parameter model re-run on every query to rediscover that
+`cluster` is about grouping or that `merge` and `combine` are cousins. They can be
+computed **once**, into a graph: deterministic, auditable, owned, CPU-resident,
+permanent. After that, a query is a *traversal*, not an *inference*. The model
+gets called only for the one thing it is irreducibly good at, generating and
+reasoning over something genuinely new, and even then with tight, pre-assembled
+context.
+
+I am not trying to replace the model. I'm trying to **invert AI's cost
+structure**: move the durable value into a graph that's cheap and owned, and
+demote the model to a thin, occasional, swappable commodity you touch as little as
+possible. Make AI cheap by doing far *less* of it. If a computer can understand
+language by *looking up* a structure instead of *re-thinking it from scratch*
+every time, it becomes more useful to more people at a fraction of the cost. That
+is the agenda, and that is why I keep pushing on it. The vision here is mine:
+language as a queryable substrate, the model demoted to a commodity. I want that
+on the record.
+
+== How we got here (today's path)
+
+The day started narrow and ended at the substrate. The arc, in order, because the
+*how* matters as much as the conclusion:
+
+. *Vocab-mismatch evals.* Confirmation gate over the **real** gen'd store (3108
+  symbol cards, not toy fixtures). Result: BM25 `0/12`, hand-authored synonym
+  oracle `7/12`, hybrid (BM25+dense) `0/12`. A large synonym-bridge headroom that
+  neither keyword nor dense retrieval captured at R@1. (Held honestly as
+  *uncalibrated*: oracle is an upper bound; hybrid-0 may be an RRF artifact.)
+. *The dictionary.* Pulled Open English WordNet 2025 (OEWN, CC-BY-4.0) and mapped
+  its explicit pointers onto aden's `EdgeType`s: synset→`SynonymOf`,
+  hypernym→`IsA`, meronym→`PartOf`. 33 code-seed words → 567 typed triples,
+  deterministic, no gloss-guessing.
+. *The WSD wall, on real data.* Unscoped import is a *mix*: genuine bridges
+  (`store→keep`, `search→lookup`) and wrong-sense noise (`edge→sharpness`,
+  `vector→virus`, `secret→arcanum`). Gonzalo's 1998 penalty, reproduced on aden's
+  own vocabulary.
+. *Corpus-grounding.* Keep an edge only if both endpoints are real corpus tokens,
+  tokenized by aden's own tokenizer. `567 → 296` kept / `271` dropped. The
+  wrong-sense cluster filtered deterministically, no model.
+. *The pivot.* The instinct that reframed everything: *don't take the dictionary's
+  word for it.* Let the graph **redefine** relationships from how terms actually
+  connect in the corpus: descriptive (distributional) semantics over OEWN's
+  prescriptive (lexicographic) ones. PPMI over the term↔card graph,
+  model-free. The contrast was stark: OEWN says `cluster→flock/clump`, the graph
+  says `cluster→louvain/modular`; OEWN says `vector→virus`, the graph says
+  `vector→re-embed/embeddingprovider/f32`. Domain truth, derived from counting.
+. *The correction.* Grounding had been too aggressive. It deleted edges to words
+  not in the codebase, but *a user's query uses words the codebase doesn't*.
+  `amalgamate`, `credential`: the lexicon is the **on-ramp from arbitrary English
+  into the domain**, so you want all of it. Grounding is a *ranking* signal, not an
+  *ingest* filter.
+. *The substrate.* So: take the ENTIRE dictionary. The full OEWN as a graph is
+  **172,018 edges** (77,575 `SynonymOf`, 87,978 `IsA`, 6,465 `PartOf`) across
+  **69,150 lemma nodes**, generated in **2.4 seconds**, 16 MB on disk, and that's
+  a floor (antonyms, inverses, derivations still to come). The whole of English
+  fits in a rounding error of compute.
+
+== What we built (all dry-run, `.aden/store` untouched)
+
+[cols="2,3", options="header"]
+|===
+|Artifact |Purpose
+
+|`crates/aden-cli/tests/real_symbol_vocab_ab.rs` |Confirmation gate on real gen'd cards (the +7 headroom)
+|`scripts/oewn_to_triples.py` |OEWN → neutral typed triples (explicit pointers, offline extraction)
+|`crates/aden-cli/tests/oewn_grounding.rs` |Deterministic corpus-grounding (the WSD gate)
+|`crates/aden-cli/tests/graph_derived_edges.rs` |PPMI graph-derived relationships vs OEWN, head-to-head
+|===
+
+Nothing has touched the store. Every number above is a measurement, not a
+mutation. That discipline is the point: measure before you mutate the graph.
+
+== The honest boundary
+
+For the published record, the precise claim is the strong one, so I'll draw the
+line myself: aden is a **retriever and knowledge substrate, not a reasoner.** It
+will never write the Louvain implementation or reason about a case it's never
+seen. That stays the model's job. What aden does is make that the *only* thing
+you pay neural compute for. Three constraints we're holding to:
+
+* *The lexicon is generic → it lives once, as a shared overlay,* not copied into
+  every project's `.aden/store`.
+* *Storing it all ≠ better retrieval automatically.* The full graph is necessary
+  but not sufficient; traversal-time sense ranking is the remaining hard part.
+* *Word-sense disambiguation moves from ingest-time (hard) to traversal-time
+  (tractable, gated by domain context).* Ingest everything; rank smart.
+
+== The retrieval redo, where the afternoon went
+
+The lexicon got built for real: a sign-off'd write to a *dedicated* store, never
+`.aden/store`. The full OEWN is now ~436k symmetric edges at `~/.cache/aden/lexicon`,
+queryable and reversible. Then the real question: does any of it make *retrieval*
+better? The answer was a string of honest negatives that resolved into one real win.
+
+. *Query expansion is dead, five ways.* Expanding a search query with a word's
+  relations (OEWN naive, OEWN corpus-grounded, corpus-PPMI bulk, corpus-PPMI
+  targeted) lifts routing `+1/12` at best, vs a hand-authored oracle's `7/12`.
+  Polysemy floods; the domain-specific bridges OEWN simply lacks. Expansion is the
+  wrong mechanism, but I had over-claimed "relations don't work" from it.
+. *R@1 was hiding the whole iceberg.* Every gate had scored top-1 hit/miss. Once we
+  measured *rank-of-gold* at R@5/R@10/MRR (and turned on the dense path), the signal
+  appeared: dense pulls the gold from rank ~200 to rank ~10, and the oracle proves the
+  benchmark is *solvable* (MRR 0.68). Retrieval's problem was never "can't find it";
+  it's "gets it to rank ~10, not the top."
+. *A shipped-path flaw fell out.* Pure dense beats the shipped hybrid RRF
+  (MRR 0.146 vs 0.061). Equal-weight fusion *drags dense down* by averaging in
+  BM25's near-random ranks. A weight sweep found dense-weighted RRF (1:5) at
+  MRR 0.182, ~3× the shipped fusion, recovering a top-1. Fix = adaptive/dense-weighted
+  fusion (production change, validate-then-sign-off).
+. *The first real win for relationships.* Used as a *reranker* on dense's top-20
+  (not an expander), corpus relationships (PPMI) lift R@5 `3→5` and MRR `0.146→0.184`,
+  the first non-oracle top-1. The mechanism was the problem all along, not the relations.
+. *And the layering holds.* Layer 2 adds an OEWN SynonymOf *agreement* signal
+  (a relationship the dictionary AND the corpus both attest), which nudges it to MRR `0.198`,
+  R@5 `4`. The progression is consistent: dense `0.146` → +PPMI `0.184` → +OEWN `0.198`,
+  every validated layer positive. Increments diminish (+0.038, +0.014) and the oracle
+  (`0.678`) is still far on 12 probes. Not cracked, but moving the right way, methodically.
+Layer 3 (crate-domain scoping) then came in *flat* (`0.197`). The progression converges at
+L2: the rerank lever is real (`+35%` MRR over the dense baseline) but bounded. The plateau the
+methodical loop predicts. And the two wins don't *compound*. Reranking the fusion-fixed base
+(`0.195`) is *worse* than reranking pure dense (`0.203`): both inject the same signal dense
+lacks, so it's pick-one, not stack. The complete automatic map: dense `0.146` → fusion `0.182`
+→ rerank `0.203`, against the oracle's `0.678`. So ~`0.20` is the *automatic ceiling* on this
+benchmark; the gap to the oracle is *domain knowledge* (this codebase uses Louvain) that no
+generic method derives.
+
+And a negative worth recording: *naive whitening hurts.* Mean-centering / diagonal whitening
+of the bge vectors dropped MRR `0.145 → 0.110`, because bge is a *cosine-trained sentence model*,
+not raw BERT: globally reshaping its geometry destroys learned structure rather than freeing it.
+The dense *base* is good as-is; the iterative whiten↔rerank loop loses its whitening engine
+unless the *graph-regularized* form (gentle, structure-preserving) threads the needle, which is
+uncertain. The working levers stay the *rerank layers* and the *fusion fix*.
+
+The lesson worth keeping: *measure R@5/MRR, not R@1.* A binary top-1 metric scored a
+massive rank-shift as a flat "miss" and nearly buried a real result.
+
+== The population layer, when the graph writes its own relationships
+
+The afternoon's levers all *consumed* a graph; the evening's move was to *populate*
+one, the bet from the top of this entry made concrete.
+
+First, the honest dead-end that pointed the way. I tried routing `NL → prose → code`
+along aden's *existing* edges: dense-match the prose, then spread relevance down the
+`Mentions`/`Demonstrates` links to the symbol the prose describes. It came in flat.
+Those edges only link unambiguous names, so they're sparse by construction and the
+boosts rarely fired. The lesson wasn't "routing doesn't work." It was: *the graph
+isn't dense enough yet.* Don't write a cleverer router, write a richer graph.
+
+So I built the thing this entry has been circling: a **concept graph** where the
+nodes are parts of speech and the edges are relationships the *model* draws from how
+words are actually used here. Each distinctive corpus term becomes a POS-tagged node
+(POS from OEWN; pure-code identifiers tagged `?`) carrying a **context-centroid**:
+the bge embedding averaged over every card the term appears in. That centroid *is*
+the term's sense **in this corpus**, so the relationships come out sense-correct by
+construction. Mutual-kNN over those centroids gives the `SimilarTo` overlap edges.
+1,882 nodes, 1,677 mutual edges, one pass, written to a JSON artifact. The store
+never touched.
+
+And the relationships are *right*. The WSD wall the generic dictionary couldn't
+clear, cleared by grounding meaning in usage:
+
+[cols="1,2,2", options="header"]
+|===
+|Term |Generic dictionary (OEWN) |Concept graph (this corpus)
+
+|`cluster` |`flock`, `clump`    |`community`, `modular`, `connect`
+|`fuse`    |`weld`, `melt`      |`rrf`, `fusion`, `reciprocal`, `bm25`
+|`secret`  |`arcanum`, `occult` |`credential`, `pem`, `secure`
+|`vector`  |`virus`             |`embeddingprovider`, `embed`, `bge`
+|===
+
+Then the real test: does the populated graph make *retrieval* better? The answer
+split cleanly along *how you consume it*, and that distinction is the whole point:
+
+* *Expansion still dies*, even with perfect relations. Adding a term's concept
+  neighbours to the query and re-embedding dropped MRR `0.141 → 0.074`. The sixth
+  independent confirmation that expansion is the wrong mechanism: it *drifts* the
+  query embedding (and feeds it broken stems) instead of sharpening it.
+* *Reranking wins.* The *same* relations, used to boost the dense top-20 candidates
+  that actually **contain** a query term's concept-neighbours (no embedding drift,
+  just a lexical-overlap signal added to the score), lifted MRR `0.141 → 0.241`,
+  *+71%*. That beats the afternoon's best automatic reranker (PPMI+OEWN at `0.203`):
+  the strongest automatic signal yet on this benchmark, and proof that the *quality
+  of the relationships* (sense-correct, corpus-grounded) is what moved the number.
+
+Then I swept the knobs, to be sure `0.241` wasn't a lucky point. It wasn't the
+ceiling either. Tightening to fewer, higher-precision neighbours (`k=4`) and reranking
+the dense top-20 lifts it to **`0.289`** (+105% over dense, R@1 `1 → 3`). Two structural
+facts fell out, both clean: the boost weight `λ` is *irrelevant* (`0.25 = 0.5 = 1 = 2`
+all tie, because the rerank is really a *lexicographic sort by overlap-count, then dense-score*),
+and *precision beats recall* in the neighbour set, since more neighbours just match the wrong
+cards. The honest boundary still stands: twelve probes, and the oracle at `0.641` is
+domain knowledge no generic method derives. But the *shape* of the win is the claim:
+*populate the graph with model-drawn, sense-correct relationships, then consume them by
+reranking, not expanding.* The substrate redefined its own edges from usage, and consumed
+the right way, beat every generic method we'd tried. The bet paying a first dividend.
+
+== What came next
+
+. *Validate `0.289` beyond 12 probes*: the sweep locked the knobs (`k=4`, `head=20`, `λ`
+  insensitive); the open risk is the thin probe set, not the tuning. Author more
+  synonym-mismatch probes and/or validate on external eval corpora before calling `0.289`
+  the settled ceiling.
+. *Ship the fusion fix*: dense-weighted / adaptive RRF, validated on real eval corpora,
+  then into `rrf_fuse` on sign-off. Still the one concrete, user-facing win that's
+  independent of the rerank layer.
+. *Typed edges, now grounded*: a research pass over `the research notes` confirms the
+  Tier-1 set (`SynonymOf`/`IsA`/`PartOf`/`AntonymOf`) is *already* first-class in
+  `aden-core`; the gap is the bulk *producer*, not the schema. The synthesis to test next:
+  gate OEWN's typed edges by the concept graph's context-centroid proximity, making them
+  *typed and sense-correct at once*, which is exactly the graph-context-gated WSD this codebase
+  has been hypothesizing. POS-gating and the overloaded `\` pointer are the known hazards.
+
+'''
+[.devlog-foot]
+This is a lightly cleaned entry from the raw link:/devlog/[Aden devlog]. The polished stories that draw on these days live in the link:/series/aden/[Aden series].

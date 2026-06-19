@@ -266,3 +266,27 @@
     color: var(--secondary);
     font-style: italic;
 }
+
+/* Reader-facing newest/oldest sort toggle on list feeds (home, sections). */
+.post-sort {
+    margin: 0 0 1.2rem;
+    text-align: right;
+}
+.post-sort button {
+    font: inherit;
+    font-size: 0.82em;
+    cursor: pointer;
+    color: var(--secondary);
+    background: var(--rio-accent-soft);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.25rem 0.75rem;
+    transition: color 0.15s ease;
+}
+.post-sort button::before {
+    content: "\21C5\00a0";  /* up-down arrows */
+    opacity: 0.7;
+}
+.post-sort button:hover {
+    color: var(--primary);
+}

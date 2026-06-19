@@ -4,7 +4,7 @@ slug: "2026-06-04"
 date: 2026-06-04
 lastmod: 2026-06-04
 draft: false
-summary: "A three-day correctness sprint — the pre-condition for the 2026-06-07 hybrid retrieval session. The goal: get the tool's own gate suite (lint, heal, audit, ci-check) to pass cleanly on Aden's own source, nail down cross-platform portability, and eliminate false positives that ..."
+summary: "A three-day correctness sprint, the pre-condition for the 2026-06-07 hybrid retrieval session. The goal: get the tool's own gate suite (lint, heal, audit, ci-check) to pass cleanly on Aden's own source, nail down cross-platform portability, and eliminate false positives that w..."
 categories: ["Devlog"]
 tags: ["aden", "devlog"]
 cover:
@@ -15,7 +15,7 @@ TocOpen: false
 NOTE: _Reconstructed retrospectively on 2026-06-10 from git history._
 
 [.lead]
-A three-day correctness sprint — the pre-condition for the 2026-06-07 hybrid
+A three-day correctness sprint, the pre-condition for the 2026-06-07 hybrid
 retrieval session.  The goal: get the tool's own gate suite (lint, heal, audit,
 ci-check) to pass cleanly on Aden's own source, nail down cross-platform
 portability, and eliminate false positives that were masking real signals.
@@ -25,7 +25,7 @@ consolidation pass.  30 commits over three days.
 
 == 2026-06-03
 
-== License header normalization — commit `c729b63`
+== License header normalization: commit `c729b63`
 
 Every source file now carries the canonical two-line SPDX/FSF REUSE header:
 
@@ -36,10 +36,10 @@ Every source file now carries the canonical two-line SPDX/FSF REUSE header:
 contradictory "All rights reserved" variants) and 9 headers added where none
 existed (benches, test modules, `install.sh`, PowerShell adapter files).
 Coverage reached 100% across all 92 `.rs` files and 6 shell/PowerShell files.
-Ownership and licensing are unchanged — the per-file notice is the
+Ownership and licensing are unchanged. The per-file notice is the
 more-thorough posture so provenance survives file extraction.
 
-== Dead-code removal and workspace cleanup — commits `523a4a1`, `d0bc0b1`
+== Dead-code removal and workspace cleanup: commits `523a4a1`, `d0bc0b1`
 
 `523a4a1` removed four Phase-5/6 roadmap stub crates (`aden-api`,
 `aden-attest`, `aden-simulate`, `aden-telemetry`) that had zero workspace
@@ -52,7 +52,7 @@ lines; call-site resolution unaffected.
 `cargo fmt --all` across the workspace, clearing pre-existing formatting drift
 in 26 files.  Clippy and fmt both clean; 255 tests passed.
 
-== Runtime-panic audit — commit `f8e9676`
+== Runtime-panic audit: commit `f8e9676`
 
 Audited every `.unwrap()`/`.expect()`/`panic!` outside test modules across the
 workspace.  Three genuine panic sites fixed:
@@ -66,7 +66,7 @@ workspace.  Three genuine panic sites fixed:
 * `aden-graph/src/query.rs`: `edge_endpoints(edge).unwrap()` in
   `exec_all_edges` → replaced with `let Some(..) else { continue }`.
 
-== ask routing, locate precision, audit SQL accuracy — commit `9183866`
+== ask routing, locate precision, audit SQL accuracy: commit `9183866`
 
 Four precision fixes from validating against external test corpora:
 
@@ -84,7 +84,7 @@ Four precision fixes from validating against external test corpora:
 
 Regression tests for all four.
 
-== Honest call-graph diagnostics — commit `e1bad87`
+== Honest call-graph diagnostics: commit `e1bad87`
 
 The "unresolved call sites" metric was a reporting artifact, not a graph gap.
 `classify_drop` now labels external calls (stdlib, macros, other crates) as
@@ -93,7 +93,7 @@ type is not a project symbol is treated as external rather than "ambiguous".
 `gen` summary now reads "N internal calls linked, N external, N polymorphic".
 No change to which edges are built.
 
-== self/this receiver call resolution — commit `291c4a1`
+== self/this receiver call resolution: commit `291c4a1`
 
 A call through the current instance (`self.foo`, `this.foo`, `$this->foo`,
 `Self::foo`) provably targets a method of the caller's own enclosing type.
@@ -102,7 +102,7 @@ anchor's type (`Command.main` → `Command.foo`), preserving each language's
 member separator.  Calls to inherited methods the enclosing type does not
 define fall through to the existing base resolution.  Zero false-edge risk.
 
-== Go method receiver type resolution — commit `77c887c`
+== Go method receiver type resolution: commit `77c887c`
 
 `extract_receiver_type` dropped the type of every pointer receiver
 (`func (c *Command) M()`) because it looked up a nonexistent `type` field on
@@ -111,11 +111,11 @@ bare (`#M`), risking cross-type anchor collisions.  Fixed: the resolver now
 descends into the pointer/generic type node, qualifying Go methods as
 `Command.M`.  With the receiver type known, calls through the receiver variable
 (`c.Other()` inside a `*Command` method) are rewritten to `Command.Other` for
-exact linker resolution — the Go analogue of self/this resolution.
+exact linker resolution (the Go analogue of self/this resolution).
 `name_index` also indexes the trailing `.` segment so newly-qualified methods
 remain resolvable from bare/receiver calls.
 
-== Interpolated-value audit false positives — commit `0ff7003`
+== Interpolated-value audit false positives: commit `0ff7003`
 
 The A07 hardcoded-credential detector matched interpolated values like
 `AUTH_SECRET="${secret}"` in `.env` templates.  The value character class now
@@ -124,7 +124,7 @@ excludes `$`/`{`/`}`, so templated values (`"${secret}"`, `"{{token}}"`,
 applied to `ci-check` secret-scan patterns.  `SECRET_ASSIGNMENT_PATTERN`
 extracted as a named constant; regression test added.
 
-== Doc accuracy sweep — commit `704abbb`
+== Doc accuracy sweep: commit `704abbb`
 
 Audited the full doc set against the actual CLI and code:
 
@@ -142,10 +142,10 @@ Audited the full doc set against the actual CLI and code:
 
 == 2026-06-04
 
-== ask routing: sub-word indexing and real-symbol preference — commit `474d6a6`
+== ask routing, sub-word indexing and real-symbol preference: commit `474d6a6`
 
 Root cause of routing to test fixtures: `tokenize` split only on whitespace,
-so `Flask.dispatch_request` indexed as a single token — a bare `dispatch`
+so `Flask.dispatch_request` indexed as a single token. A bare `dispatch`
 query got 0 hits.  Fixed:
 
 * `tokenize` now also emits identifier sub-tokens (snake_case, kebab-case,
@@ -161,16 +161,16 @@ including `Flask.dispatch_request`; gin middleware ask routes to
 `RouterGroup.handle`; flask session ask routes to
 `SessionInterface.save_session`.
 
-== regen as true from-scratch rebuild — commit `55f4c82`
+== regen as true from-scratch rebuild: commit `55f4c82`
 
 `regen` cleared the gen-cache and graph-cache but left the store intact.  A
-renamed or removed symbol was never pruned and lingered as a stale duplicate —
+renamed or removed symbol was never pruned and lingered as a stale duplicate,
 directly contrary to the documented "recompile from scratch" contract.  `regen`
 now wipes the entire per-user project dir (store + caches) before regenerating,
 so the rebuild starts from an empty store.  Integration test: rename a symbol,
 `regen`, assert old anchor gone and new one present.
 
-== Secret scan: lockfile hashes and long identifiers — commit `a27fd64`
+== Secret scan, lockfile hashes and long identifiers: commit `a27fd64`
 
 The broad 32-64 char "long hex secret" pattern matched package integrity
 hashes in `uv.lock`, `package-lock.json`, `go.sum`, and long CamelCase
@@ -180,14 +180,14 @@ pure-alphabetic identifiers don't fire.  `check source_file` path resolution
 (`607a578`) also fixed: `check_hashes` now joins relative paths onto the
 project root rather than the process CWD.
 
-== Dependency and dead-code cleanup — commits `68a01bb`, `2607b12`
+== Dependency and dead-code cleanup: commits `68a01bb`, `2607b12`
 
 `68a01bb`: ten unused deps removed via `cargo-machete` across six crates;
 build and machete clean.  `2607b12`: `aden-propose::patch`/`stub` had zero
-callers; the stale parallel rendering path deleted — `aden-propose` is now
+callers; the stale parallel rendering path deleted. `aden-propose` is now
 pure-std with no `aden-core` or `thiserror` dependency.
 
-== MCP tier registry — commit `23b2829`
+== MCP tier registry: commit `23b2829`
 
 The MCP registry exposed 35 flat tools with scaffolding commands leading and
 high-frequency read tools buried.  Redesigned:
@@ -203,7 +203,7 @@ high-frequency read tools buried.  Redesigned:
   `check`, `diagnose`, `doctor`, `status`, `gen`, `complete`, `federation`.
 * ~45% fewer registry tokens per session with no CLI capability lost.
 
-== Orphan dedup — commits `06a87c1`, `45595c0`
+== Orphan dedup: commits `06a87c1`, `45595c0`
 
 `scan_orphans` and `classify_orphans` both iterated `graph.orphans()`, which
 yields an anchor once per node.  Several files collapsing to one anchor
@@ -212,7 +212,7 @@ inflated counts in `status` JSON, and a skewed health score.  Both deduped by
 anchor; `health_score_from_graph` now counts distinct anchors, not raw nodes.
 Regression tests for both.
 
-== PowerShell process bridge retired — commit `d756348`
+== PowerShell process bridge retired: commit `d756348`
 
 PowerShell was the only language parsed by shelling out to `pwsh` + an
 `Export-AST.ps1` sidecar that was never actually installed (always warned
@@ -223,7 +223,7 @@ bridge, the sidecar, and the dead `make_anchor` re-export were deleted (~288
 lines gone); PowerShell node kinds (`function_statement`, `class_statement`,
 `class_method_definition`) taught to the cross-language walker.
 
-== Gate false-positive elimination — commit `2aab9f8`
+== Gate false-positive elimination: commit `2aab9f8`
 
 Three pre-commit/CI gates failed on Aden's own source for reasons unrelated to
 real defects:
@@ -239,7 +239,7 @@ real defects:
   Both gates now judge score only over `BrokenReference`/`SignatureMismatch`
   events, matching what `diagnose` reports.
 
-== Semantic doc/code divergence gate — commit `1e01834`
+== Semantic doc/code divergence gate: commit `1e01834`
 
 A new `DocSignatureDivergence` drift event (High severity) catches docs
 describing a stale API.  For each fenced code block in a `.md`/`.adoc`/`.rst`,
@@ -252,11 +252,11 @@ site usage examples); only function names unique in the codebase compared
 (overloads skipped); languages without a deep parameter-extracting parser
 skipped entirely.  Finds zero false positives on Aden's own docs.
 
-== Windows compatibility — commits `9474ad3`, `dec33df`
+== Windows compatibility: commits `9474ad3`, `dec33df`
 
 Audited the codebase for Windows-specific failures and fixed the gate paths:
 
-* `source_hash` computed over raw bytes — a CRLF checkout hashed differently
+* `source_hash` computed over raw bytes. A CRLF checkout hashed differently
   from the LF-generated contract, producing spurious `StaleHash` drift on every
   file.  `aden_core::hash_source` normalizes CRLF/CR to LF before hashing.
 * AsciiDoc listing-fence detection (`line == "----"`) failed on `----\r`;
@@ -266,7 +266,7 @@ Audited the codebase for Windows-specific failures and fixed the gate paths:
   detection had the same issue.
 * All test fixtures using hardcoded `/tmp` paths migrated to `std::env::temp_dir()`.
 
-== OrphanAnchor/MissingContract false-positive flood — commit `08759a1`
+== OrphanAnchor/MissingContract false-positive flood: commit `08759a1`
 
 The heal scanner was reporting ~3145 phantom drift events (2151
 `OrphanAnchor` + 994 `MissingContract`) and a permanent 0.00 health score.
@@ -285,12 +285,12 @@ Three root causes:
 
 Result: ~3145 → 15 drift events, health 0.00 → 0.98, cold == warm.
 
-== Project name consistency and scan cache versioning — commit `c1206ee`
+== Project name consistency and scan cache versioning: commit `c1206ee`
 
 `infer_project_name` resolved differently for absolute vs relative paths:
 when the manifest sits at CWD, `Path::file_name()` is `None` and the name
 fell back to "unknown".  `gen` ran with absolute paths (real name); the heal
-scanner ran with relative paths ("unknown") — producing divergent
+scanner ran with relative paths ("unknown"), producing divergent
 `aden://module/{project}/…` anchors for the same file.  Fixed by canonicalizing
 to recover the directory name when `file_name()` is absent.
 
@@ -303,7 +303,7 @@ Result: heal drift 15 → 5; health 0.98 → 0.99; no PowerShell false positives
 
 == 2026-06-05
 
-== AdenFilter applied to directory walks — commit `b279adc`
+== AdenFilter applied to directory walks: commit `b279adc`
 
 `aden-graph`'s `collect_files` and `aden-diagnose`'s `collect_adoc_files`
 both descended into excluded scaffolding and VCS trees (`.agent/`,
@@ -314,41 +314,41 @@ and `LowConfidence` issues.  Both walks now honor `AdenFilter` with paths
 checked relative to root.  `diagnose` dropped from 220 issues to 56 (all
 legitimate `Info`), zero `.agent`/`.claude` leakage.
 
-== lint: rules matching their own pattern literals — commit `ebc09d5`
+== lint, rules matching their own pattern literals: commit `ebc09d5`
 
 The `unsafe_fn`, `unwrap_used`, `todo_in_code`, and `debug_print` lint rules
 tested the raw line instead of the string/comment-blanked `code`, so they
 fired on their own rule-pattern literals (e.g. `line.contains("unsafe fn")`)
 in the linter's own source.  Routes macro/keyword detection through
 `code_only`.  `code_only` also became raw-string-aware (`r"…"`, `r#"…"#`,
-`r##…`) — plain-string understanding meant patterns inside raw-string test
+`r##…`). Plain-string understanding meant patterns inside raw-string test
 fixtures leaked through.  Aden's own lint dropped from 13 findings to 4; the
 4 remaining are genuine `println!("{:?}", …)` cases.
 
-== CI fixture and gate fixes — commits `3e3773e`, `04740bf`, `f0c2524`
+== CI fixture and gate fixes: commits `3e3773e`, `04740bf`, `f0c2524`
 
 * `3e3773e`: added a language-agnostic `aden:allow-secret` line marker so
   fixture/doc lines can opt out of the secret-scan gate without special-casing
   by value.  AWS `AKIAIOSFODNN7EXAMPLE` exempt by value; `REGEX_DEF_MARKERS`
   generalized from Rust-only to Go, Python, Java, JS/TS, .NET, Ruby, PHP.
 * `04740bf`: `build_from_directory_excludes_scaffolding_and_vcs` hardcoded
-  forward-slash `"docs/real.adoc"` — fails on Windows where the separator is
+  forward-slash `"docs/real.adoc"`. Fails on Windows where the separator is
   `\`.  Separators normalized before the `ends_with` check.
 * `f0c2524`: `test_index_persistence` and `try_load_rejects_stale_version`
-  both touched the process-global `ADEN_DATA_DIR` and ran in parallel — the
+  both touched the process-global `ADEN_DATA_DIR` and ran in parallel, so the
   interleaved set/remove made them resolve to different cache dirs, causing
   flaky failures on the Windows CI runner.  Serialized via an `ENV_LOCK` mutex
   + `isolated_data_dir()` helper.  CI tests now run `--no-fail-fast` so a
   single run reports all failures across all crates.
 
-== locate: helpful error on positional symbol — commit `85cae05`
+== locate, helpful error on positional symbol: commit `85cae05`
 
 `aden locate myFn` put the symbol in the `[DIR]` positional and failed with
 the opaque "locate requires a directory path".  When the positional is not a
 directory and neither `--symbol` nor `--caller-of` was given, point the user
 at the correct invocation instead.
 
-== `aden agents-md` — ADR-004 — commit `e4893fa`
+== `aden agents-md`, ADR-004: commit `e4893fa`
 
 `aden agents-md [DIR]` and `aden init --agents-md` write a short, behavior-
 changing aden usage block into a repo-root `AGENTS.md` so AI agents use aden
@@ -361,7 +361,7 @@ to seed on interactive installs; skipped when piped/non-interactive so it never
 edits a file unprompted.  Decision documented in
 `docs/adr-004-agents-md-guidance.adoc`.
 
-== Doc consolidation and accuracy sweep — commits `e49051e`, `f8f9d05`, `f39a5d7`, `8fd2afe`
+== Doc consolidation and accuracy sweep: commits `e49051e`, `f8f9d05`, `f39a5d7`, `8fd2afe`
 
 `e49051e`: `commands.adoc` updated for `agents-md`, `review`, `session`, and
 `mcp install/uninstall`; the stale "ls deprecated" row removed; 18 → 12 doc
@@ -370,11 +370,11 @@ files by folding `philosophy`/`context`/`experimental-crates` into
 `mcp-intro.md` into `ai-integration.adoc`.  The lone ditaa diagram replaced with
 a Mermaid flowchart.
 
-`f8f9d05`: `philosophy.adoc` immediately restored as a standalone doc — it is
+`f8f9d05`: `philosophy.adoc` immediately restored as a standalone doc. It is
 the conceptual entry point and reads better on its own.  A duplicate
 `[[use-cases]]` anchor that would have tripped `aden check` fixed.
 
-`f39a5d7`: validation pass over the consolidated docs — closed an unterminated
+`f39a5d7`: validation pass over the consolidated docs. Closed an unterminated
 source block in `ai-integration.adoc` that was swallowing literal text, fixed a
 Mermaid label collision, corrected a typo in `adr-003`, converted a Markdown
 pipe table to AsciiDoc `|===`.  `8fd2afe` added the missing ADR-004 entry to

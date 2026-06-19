@@ -4,7 +4,7 @@ slug: "2026-06-10"
 date: 2026-06-10
 lastmod: 2026-06-10
 draft: false
-summary: "Session carried over from 2026-06-09 (past midnight), then a fresh session. Four rounds: docs/code sync for all post-v0.2.0 work; root-causing and fixing the remaining ask eval gate failures (all five gates green); the graph round — viz blast/reach direction fix (H4), editor a..."
+summary: "Session carried over from 2026-06-09 (past midnight), then a fresh session. Four rounds: docs/code sync for all post-v0.2.0 work; root-causing and fixing the remaining ask eval gate failures (all five gates green); the graph round: viz blast/reach direction fix (H4), editor au..."
 categories: ["Devlog"]
 tags: ["aden", "devlog"]
 cover:
@@ -15,67 +15,67 @@ TocOpen: false
 [.lead]
 Session carried over from 2026-06-09 (past midnight), then a fresh session. Four rounds:
 docs/code sync for all post-v0.2.0 work; root-causing and fixing the remaining `ask` eval gate
-failures (all five gates green); the graph round — viz blast/reach direction fix (H4), editor
+failures (all five gates green); the graph round: viz blast/reach direction fix (H4), editor
 auto-detect for the viewer's open-in-editor links, typed-edge wave 2 (`Mentions` +
 `Demonstrates`); and the trim-fat + Term-nodes round that completes wave 2 (census 12 live
 types, density gate up to 0.560). Main is 16 commits ahead of origin, pending push validation.
 
-== Round 38 (carried from 2026-06-09 session) — docs/code sync for post-v0.2.0 commits
+== Round 38 (carried from 2026-06-09 session): docs/code sync for post-v0.2.0 commits
 
 The post-v0.2.0 batch of graph-model commits (`f410cee`–`ebf6917`) shipped without corresponding
 doc updates. This round brought four files current, plus two housekeeping items:
 
-* *`docs/architecture.adoc`* — Graph Build table now lists `Tests`, `Implements`, `Mutates` (wave 1),
+* *`docs/architecture.adoc`*: Graph Build table now lists `Tests`, `Implements`, `Mutates` (wave 1),
   `RelatesTo` (prose refs via ADR-006), and policy pointer to ADR-007. The "What happens when you run
   `aden ask`" section gained: conceptual routing (BM25 + in-degree signal, golden-set 5/10→10/10),
   source hydration (F2), the escalation ladder (F3), and the `--explain` flag.
-* *`docs/commands.adoc`* — `ask` section: `--explain` flag documented with example and flags table
+* *`docs/commands.adoc`*: `ask` section: `--explain` flag documented with example and flags table
   entry. `impact-diff` section: `--json` includes an `affected_tests` array of test-source anchors
-  that have `Tests` edges into the blast radius — now documented.
-* *`CHANGELOG.md`* — added `[Unreleased]` section covering all post-v0.2.0 work: wave-1 typed edges
+  that have `Tests` edges into the blast radius. Now documented.
+* *`CHANGELOG.md`*: added `[Unreleased]` section covering all post-v0.2.0 work: wave-1 typed edges
   (census: Tests 138 / Implements 75 / Mutates 16), prose `RelatesTo` edges (58 unresolved → 0),
   `ask --explain`, conceptual routing, density/immediacy three-layer fix with eval gates, impact-diff
   direction correctness, MCP↔CLI parity, ADR-005 accepted, ADR-006/007, CLA v1.0. Also moved the two
   viewer fixes (density slider locked during replay at `7206c5c`; panel pointer-event leak at
-  `36299d2`) to the `[0.2.0] Fixed` section — they were pre-tag and belonged there.
-* *`docs/adr-006-prose-graph-references.adoc` line 68* — the illustrative `xref:file.adoc#fragment`
+  `36299d2`) to the `[0.2.0] Fixed` section (they were pre-tag and belonged there).
+* *`docs/adr-006-prose-graph-references.adoc` line 68*: the illustrative `xref:file.adoc#fragment`
   example was firing `check`'s path-link detector. Added `// aden:allow-path` inline to suppress the
   false positive on a deliberately-shown example.
-* *`.adenignore`* — eval harness scripts (`eval_ask_density.py`, `eval_corpus.py`, `bench.py`) added
+* *`.adenignore`*: eval harness scripts (`eval_ask_density.py`, `eval_corpus.py`, `bench.py`) added
   to exclusions. They share identifiers (`anchor_hits`, `density`, `immediacy`) with production code
   and were polluting ask routing for density-related questions (this was root-causing Q4's anchor miss
   in the eval).
 
-These changes landed in a single commit (`38aa9c6` — working SHA before the eval-gate commit).
+These changes landed in a single commit (`38aa9c6`, working SHA before the eval-gate commit).
 
-== Round 39 (2026-06-10) — eval gate fixes; all five gates green
+== Round 39 (2026-06-10): eval gate fixes; all five gates green
 
 Ran `eval_ask_density.py` after the Round 38 commit and got 3 failing gates. Root-caused and fixed
 three independent issues, then confirmed all five gates pass.
 
 *Root causes (four, not three):*
 
-. *Corpus pollution (Q4 anchor miss)* — eval scripts indexed, routing "ask density" questions to
+. *Corpus pollution (Q4 anchor miss)*: eval scripts indexed, routing "ask density" questions to
   `eval_ask_density.py#anchor_hits` instead of the production assembler. Fixed by the `.adenignore`
   addition in Round 38 (done before the gate run, so Q4 actually re-ran clean in Round 39).
-. *Honesty overflow (Q5)* — the `resolved_alts` alternates loop in `cmd_ask` (`query.rs` ~line 1748)
+. *Honesty overflow (Q5)*: the `resolved_alts` alternates loop in `cmd_ask` (`query.rs` ~line 1748)
   appended separator (`"\n\n---\n\n"`) and header (`"// alternate (ambiguous match): [[anchor]]\n"`)
   to `combined` without charging their token cost against `effective_budget`. So a multi-alternate
   response could silently exceed the budget and fail the `est_tokens(body) ≤ effective_budget` honesty
   check. Fix: replaced the static `per_alt = alt_pool / n` slice with per-iteration remaining that
   pre-subtracts separator+header overhead before each `assemble_seed` call; breaks early when fewer
   than 32 tokens remain. Removed the now-unused `alt_pool`/`per_alt` variables.
-. *Test-anchor self-suppression (Q13)* — `is_test_anchor` in `query.rs` MARKERS had bare `"test_"`.
+. *Test-anchor self-suppression (Q13)*: `is_test_anchor` in `query.rs` MARKERS had bare `"test_"`.
   The function's own anchor (`aden://module/aden-cli/query.rs#is_test_anchor`) contains `test_` as
   a substring of the fragment, so the function falsely classified itself as a test fixture and routing
   suppressed it. Fix: `"test_"` → `"/test_"` (path-component form) so the marker only fires on a
   path segment (e.g. `test_utils.py` as a file) and not on a symbol name after `#`. All other
   markers in the array were left untouched.
-. *Q9 expected set too narrow* — Q9 was accepting only `["cmd_query"]` but `ask` correctly routes to
+. *Q9 expected set too narrow*: Q9 was accepting only `["cmd_query"]` but `ask` correctly routes to
   `viz.rs#impact_edge_types`, the canonical named function that defines the impact edge-type set.
   Updated `eval_ask_density.py` expected to `["cmd_query", "impact_edge_types"]`.
 
-*Q3/Q6/Q12 immediacy* — appeared to fail in an earlier run but confirmed to be false failures (binary
+*Q3/Q6/Q12 immediacy*: appeared to fail in an earlier run but confirmed to be false failures (binary
 staleness): the strings `'tie'`, `'name_index'`, `'d > 0|intermediate'` are genuinely in the current
 source at the hydrated anchors. After the rebuild they passed.
 
@@ -92,115 +92,115 @@ source at the hydrated anchors. After the rebuild they passed.
 | honesty | 15/15 | 15/15 ✓
 |===
 
-Two queries (Q4 thin-stub, Q14 gen/Uses signature) still miss — both anchor and immediacy — but
-neither is gate-critical (gate requires ≥12, we have 13). They are logged in ISSUES.md for a
+Two queries (Q4 thin-stub, Q14 gen/Uses signature) still miss on both anchor and immediacy,
+but neither is gate-critical (gate requires ≥12, we have 13). They are logged in ISSUES.md for a
 future pass.
 
-*Three-project housekeeping note:* the Round 37 "push still pending" state is still true — main is
+*Three-project housekeeping note:* the Round 37 "push still pending" state is still true. Main is
 now 9 commits ahead of origin (`38aa9c6`/`ab4df2a` on top of the Round-37 rebase). Awaiting
 validation before push.
 
-== Round 40 (2026-06-10) — viz blast direction (H4), editor auto-detect, typed-edge wave 2
+== Round 40 (2026-06-10): viz blast direction (H4), editor auto-detect, typed-edge wave 2
 
 Four commits: `683459f` (viz blast/reach), `6b734a5` (editor auto), `7e1ab65` (wave 2 +
 `EdgeType::ALL`), `3dd2b37` (docs sync). All dogfooded through aden itself (grep/ask/locate for
 the investigation; `viz --mode graph --full -j` as the census instrument).
 
-*H4 — `viz --mode blast` walked the wrong direction.* Its own doc comment claimed "every
-blast-radius view in aden agrees on what downstream means" — but `blast_slice` BFS'd *outgoing*
+*H4: `viz --mode blast` walked the wrong direction.* Its own doc comment claimed "every
+blast-radius view in aden agrees on what downstream means", but `blast_slice` BFS'd *outgoing*
 edges (dependencies) while impact-diff was fixed to *incoming* (dependents) in `f410cee`.
 Product call per ADR-007 §2: blast = incoming dependents; the outgoing view survives honestly as
 the new `--mode reach` (matches `query --impact`). Rendered edges keep stored caller→callee
 orientation in both modes. The impact edge SET (`impact_edge_types`) had also been copy-pasted
-into viz.rs and impact_diff.rs — consolidated into one `util::impact_edge_types`. Regression
+into viz.rs and impact_diff.rs. Consolidated into one `util::impact_edge_types`. Regression
 evals: `tests/viz_direction.rs` (blast includes the caller of a changed callee, excludes its
 callees; reach is the inverse).
 
-*"Open in editor" links dead — not aden's data, the machine's handlers.* User reported
+*"Open in editor" links dead: not aden's data, the machine's handlers.* User reported
 file:line links into VS Code stopped working. The emitted JSON was correct (782/800 nodes with
 absolute `file` + `line`; `vscode://file/<abs>:<line>` is the canonical form). Root cause: this
-machine runs VSCodium, which registers only `x-scheme-handler/vscodium` — nothing handles
+machine runs VSCodium, which registers only `x-scheme-handler/vscodium`. Nothing handles
 `vscode://`, so the OS silently drops every click. (Initial red herring: `xdg-settings` output
 made it look like the Claude Code URL handler had claimed the scheme; it only claims
-`claude-cli` — its filename merely matched a grep for `code`.) Fix in aden, since the defect
+`claude-cli`; its filename merely matched a grep for `code`.) Fix in aden, since the defect
 class hits any VSCodium/Cursor/Zed-only machine: `--editor` now defaults to `auto`, probing
 PATH for code/codium/cursor/zed/idea and emitting a scheme that actually has a handler.
 Verified: generated view HTML on this machine now carries `vscodium://file{file}:{line}`.
 
-*Wave 2 typed edges — `Mentions` + `Demonstrates` (graph-type roadmap order 2), eval-first.*
+*Wave 2 typed edges: `Mentions` + `Demonstrates` (graph-type roadmap order 2), eval-first.*
 Tests written red before the emitters (`tests/wave2_edges.rs`: both formats + ambiguity/length
 negative guards). Design follows the polyglot law and the `doc_refs` precedent: extraction
-per-format (markdown + asciidoc line loops fill `doc_mentions` from backtick spans — fence
+per-format (markdown + asciidoc line loops fill `doc_mentions` from backtick spans; fence
 state known, so listings can't leak; a new shared language-neutral `listing_call_tokens` scan
 feeds `symbol_references` on code blocks), resolution format-neutral in `link_store_edges`
-(`resolve_unambiguous_code`: ≥4 chars, exactly ONE code-anchor candidate, no locality tiebreak —
+(`resolve_unambiguous_code`: ≥4 chars, exactly ONE code-anchor candidate, no locality tiebreak;
 prose has no caller locality, so collision = genuine ambiguity = no edge). Consumers: ask
 intent edge sets traverse both; a symbol's demonstrating listings fold into assembly alongside
 its callers (Demonstrates runs listing→symbol, so examples sit on the incoming side); asm ranks
 Demonstrates with Documents. Term nodes + `DefinesTerm` deferred, stated in the ADR.
 
 *The bug that earned its ADR: written but never loaded.* First wave-2 test run: records
-extracted, edges emitted, store written — and zero edges visible to any reader. The graph
+extracted, edges emitted, store written. Zero edges visible to any reader. The graph
 bridge (`GraphBridge::load_from_storage`) enumerated edge types from a local hand-written
-27-variant list, so edges of any newer type were stored but silently never loaded — exactly the
+27-variant list, so edges of any newer type were stored but silently never loaded. Exactly the
 "quiet misinformation" drift class ADR-007 §1 names. Fix: `EdgeType::ALL` in aden-core is now
 the canonical variant list; the bridge uses it; a dup-guard test plus the compile-breaking
 exhaustive `kind()` match keep it honest.
 
 *Bonus find from a broken test:* the wave-2 census helper passed the project path as a viz
-positional — which is ANCHOR, not DIR — so it accidentally censused the aden repo itself…
+positional (which is ANCHOR, not DIR), so it accidentally censused the aden repo itself…
 proving the feature on real data before the fixture ever ran (172 Mentions, all plausible:
 ADRs→`impact_edge_types`, architecture.adoc→`rrf_fuse`, security-model→`confine_path_args`).
 The two-positional foot-gun is real UX, logged below.
 
 *Census (aden repo, after `regen`):* Calls 1760 · PartOf 1678 · Contains 1650 · Uses 749 ·
 RelatesTo 466 · *Mentions 172* · Tests 169 · Implements 75 · Documents 28 · Mutates 16 ·
-*Demonstrates 12* — *11 live edge types* (6 before wave 1, 9 after).
+*Demonstrates 12* (*11 live edge types*: 6 before wave 1, 9 after).
 
 *Validation:* full workspace suite green (0 failures); `ci-check` ALL GATES PASSED; `ready`
 all PASS; density gates PASS (mean 0.540, min 0.269, anchor-hit 13/15, immediacy 13/15,
 honesty 15/15); conceptual routing 10/10; `aden check` clean after doc edits.
 
-*New issues logged (not fixed this round):* (a) viz/view two-positional trap — a bare path in
+*New issues logged (not fixed this round):* (a) viz/view two-positional trap: a bare path in
 ANCHOR position silently censuses cwd; (b) `.weight()`-style bare method calls can resolve to
 an unrelated local symbol (`petgraph EdgeRef::weight` → `LintSeverity::weight` in reach view);
 (c) `extract_code_references` is duplicated and drifted between markdown.rs (~11KB) and
-asciidoc.rs (~14.5KB) — consolidation candidate for the trim-fat phase.
+asciidoc.rs (~14.5KB), a consolidation candidate for the trim-fat phase.
 
-== Round 41 (2026-06-10) — trim-fat pass + Term nodes (wave 2 complete)
+== Round 41 (2026-06-10): trim-fat pass + Term nodes (wave 2 complete)
 
 Three commits: `35bb583` (trim), `a6b4458` (Term nodes + DefinesTerm), `60c449a` (docs).
 
 *Trim-fat (user direction: optimize without losing features).* Three structural cleanups,
 all behavior-preserving and gate-verified:
 
-* *`extract_code_references` deduplicated* — one shared impl in `aden-parse::extractor`.
+* *`extract_code_references` deduplicated*: one shared impl in `aden-parse::extractor`.
   CORRECTION to Round 40's notes: the two copies were *byte-identical* (116 lines each), not
-  "drifted ~11KB vs ~14.5KB" — that earlier claim came from a buggy brace-matcher that slurped
+  "drifted ~11KB vs ~14.5KB". That earlier claim came from a buggy brace-matcher that slurped
   trailing code (braces inside string literals). Fixed the record here; the consolidation is a
   zero-decision move either way.
 * *Emitter-less `Constrains`/`Invokes` removed from every filter* (ADR-007 §1 enforced
   retroactively): `impact_edge_types` is now 4 live types, and the ask intent sets dropped both.
   In the process found that `query --impact` and `understand` each carried a LOCAL copy of the
-  impact set — and `understand`'s had drifted (missing `Implements`/`Mutates`, so its impact
+  impact set, and `understand`'s had drifted (missing `Implements`/`Mutates`, so its impact
   view truncated at trait boundaries `query --impact` crossed). Both now use the one shared
   `util::impact_edge_types`. Third instance of the hand-list drift class this week.
-* *viz/view positional trap closed* — a directory in the ANCHOR slot now errors with guidance
+* *viz/view positional trap closed*: a directory in the ANCHOR slot now errors with guidance
   instead of silently visualizing the CWD. Regression test in `viz_direction.rs`.
 
-*Term nodes + `DefinesTerm` — wave 2 complete.* Glossary entries become
-`aden://term/<project>/<slug>` nodes (`NodeType::Term`) with section —DefinesTerm→ term edges.
+*Term nodes + `DefinesTerm`: wave 2 complete.* Glossary entries become
+`aden://term/<project>/<slug>` nodes (`NodeType::Term`) with `DefinesTerm` edges from section to term.
 Format-specific finding (AsciiDoc `Name:: def` incl. the research-KB `[[anchor]]Name::`
 multi-line idiom; Markdown `- **Term**: def` bullets), format-neutral building (shared
 `build_term_document`). Gate: glossary-titled sections, or any section of a glossary-titled
-document — ordinary dlists stay prose (negative eval). The term's definition links to code via
+document. Ordinary dlists stay prose (negative eval). The term's definition links to code via
 the existing unambiguous-only Mentions channel (its `doc_mentions` attr carries the term name +
-backticked names) — zero new resolution machinery. One real parser subtlety: inline `[[x]]`
+backticked names). Zero new resolution machinery. One real parser subtlety: inline `[[x]]`
 anchors register as level-0 pseudo-headings that SPLIT section ranges, which orphaned every
 term below the first explicitly-anchored one; fixed with a post-pass that computes glossary
 ranges over real (level>0) headings only.
 
-*Dogfood results:* aden repo census after regen — *12 live edge types*: Calls 1,788 ·
+*Dogfood results:* aden repo census after regen. *12 live edge types*: Calls 1,788 ·
 PartOf 1,692 · Contains 1,664 · Uses 753 · RelatesTo 466 · Mentions 184 · Tests 178 ·
 Implements 75 · Documents 28 · Mutates 16 · *DefinesTerm 14* · *Demonstrates 12* (the 14 Terms
 are architecture.adoc's Project Glossary). Research KB regen extracts its glossaries; the
@@ -208,25 +208,25 @@ roadmap's acceptance query `ask "what is reciprocal rank fusion"` returns the gl
 definition verbatim, inside budget.
 
 *Validation:* workspace suite 0 failures; `ci-check` ALL GATES PASSED; `ready` all PASS;
-density gates PASS with mean *0.560* (up from 0.540 — trimming inert types out of the intent
+density gates PASS with mean *0.560* (up from 0.540; trimming inert types out of the intent
 sets bought real signal); routing 10/10. Two new clippy warnings inspected and confirmed
 pre-existing (not this wave's code).
 
 *New cosmetic gap logged:* prose-only repos without a language manifest anchor everything
-under project `unknown` (`infer_project_name` fallback) — visible on the research KB
+under project `unknown` (`infer_project_name` fallback), visible on the research KB
 (`aden://term/unknown/…`). Candidate fix: fall back to the project-root directory name.
 
 == What came next
 
-. *Push main to origin* — now 16 commits ahead; ALL gates green; the tree has been
+. *Push main to origin*: now 16 commits ahead; ALL gates green; the tree has been
   commit-clean at every one of the last 7 commits. Push-safe pending user sign-off.
-. *Prune-or-repurpose the dead semantic edge set* — 10 variants still emitter-less; roadmap
+. *Prune-or-repurpose the dead semantic edge set*: 10 variants still emitter-less; roadmap
   says repurpose via `aden overlay` assertions, review uptake, cut what stays zero.
 . *`infer_project_name` fallback for prose-only repos* (the `unknown` cosmetic gap).
-. *Clean up ISSUES.md* — Priority Order + Confirmed Issues reference fixed items.
-. *ADR-005 implementation* — `.aden/config.toml`, self-contained `.aden/.gitignore`, `aden init` opt-in.
-. *M6 agent-task-success axis* — T1 locate / T2 explain / T3 blast-radius vs B0/B1 baselines.
-. *M19 multi-writer safety* — store lock; prerequisite for harness work.
+. *Clean up ISSUES.md*: Priority Order + Confirmed Issues reference fixed items.
+. *ADR-005 implementation*: `.aden/config.toml`, self-contained `.aden/.gitignore`, `aden init` opt-in.
+. *M6 agent-task-success axis*: T1 locate / T2 explain / T3 blast-radius vs B0/B1 baselines.
+. *M19 multi-writer safety*: store lock; prerequisite for harness work.
 
 '''
 [.devlog-foot]

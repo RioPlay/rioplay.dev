@@ -4,7 +4,7 @@ slug: "2026-06-11"
 date: 2026-06-11
 lastmod: 2026-06-11
 draft: false
-summary: ""
+summary: "The six-phase merge-engine integration lands: a canonical base snapshot per document, three-way reconcile wired into both heal and --fix, and five hermetic integration tests to prove it. Phases 4 through 6, in commit order."
 categories: ["Devlog"]
 tags: ["aden", "devlog"]
 cover:
@@ -12,6 +12,9 @@ cover:
 ShowToc: true
 TocOpen: false
 ---
+[.lead]
+The six-phase merge-engine integration lands: a canonical base snapshot per document, three-way reconcile wired into both heal and `--fix`, and five hermetic integration tests to prove it. Phases 4 through 6, in commit order.
+
 == What shipped
 
 The six-phase merge-engine integration is complete on `feat/heal-merge-engine`.
@@ -21,8 +24,8 @@ Awaiting user validation before push to remote.
 
 `aden-store` gained a `bases` partition storing a canonical snapshot per document
 (cascade-deleted with the doc).  `aden gen` records the snapshot.  `aden-heal`
-gained `reconcile_contract(fresh, stored, base_text, overlay)` — snapshot preferred
-over stored-doc reconstruction — and routes store-resident StaleHash/SignatureMismatch
+gained `reconcile_contract(fresh, stored, base_text, overlay)`: snapshot preferred
+over stored-doc reconstruction, and routes store-resident StaleHash/SignatureMismatch
 through it to emit `MergeReconcile` proposals.
 
 == Phase 5 (--fix via merge engine + --apply wired, commit 88ecee5)
@@ -39,16 +42,16 @@ Docs updated: commands.adoc, aden-guide.adoc, quick-ref.adoc.
 Five hermetically isolated integration tests in
 `crates/aden-cli/tests/merge_engine_integration.rs`:
 
-- `human_preservation_clean_merge` — [human] block with a non-colliding tag
+- `human_preservation_clean_merge`: [human] block with a non-colliding tag
   survives a source change as a clean merge; overlay file byte-identical after --fix.
-- `conflict_generates_proposed_marker` — [human] block with same tag as generated block
+- `conflict_generates_proposed_marker`: [human] block with same tag as generated block
   triggers Conflict; `MergeReconcile` proposal with `[proposed` marker written;
   store document untouched.
-- `apply_mergereconcile_proposal` — `--propose` then `--apply <id>` round-trip;
+- `apply_mergereconcile_proposal`: `--propose` then `--apply <id>` round-trip;
   base snapshot updated after apply.
-- `idempotence_no_source_change` — two --fix runs with no source change → zero
+- `idempotence_no_source_change`: two --fix runs with no source change → zero
   `merge-applied` output.
-- `polyglot_python_powershell` — .py + .ps1 gen/heal/fix cycle; no panics,
+- `polyglot_python_powershell`: .py + .ps1 gen/heal/fix cycle; no panics,
   no non-zero exits, both runs clean.
 
 Also fixed: `is_safe_id` in `crates/aden-cli/src/util.rs` now allows `.` to match
@@ -59,7 +62,7 @@ containing `.rs.` (derived from anchors with file extensions in the path compone
 
 For a Rust file at `src/lib.rs` inside a git-only repo (no Cargo.toml),
 `infer_project_name` returns `"src"` (first path component under VCS root).
-Anchors are therefore `aden://module/src/lib.rs#<symbol>` — constant regardless
+Anchors are therefore `aden://module/src/lib.rs#<symbol>`, constant regardless
 of the temp dir name.  Overlay filenames from `sanitize_anchor_filename` preserve
 `.`, so `aden://module/src/lib.rs#alpha` → `aden---module-src-lib.rs-alpha.adoc`.
 Conflict detection requires the [human] overlay block tag to equal the generated
@@ -73,23 +76,23 @@ block tag exactly (i.e. the full anchor URI, not a short name).
 
 |1 |`parse_contract` round-trip (7f9c891) |DONE
 |2 |Per-block `from_document` + `InsertGenerated.tag` (b01ed4e) |DONE
-|3 |Unify DriftEvent — already satisfied by prior cleanup |DONE
+|3 |Unify DriftEvent (already satisfied by prior cleanup) |DONE
 |4 |Heal through merge engine (1978afe) |DONE
 |5 |--fix via merge engine + --apply wired (88ecee5) |DONE
 |6 |Integration tests (4a365db) |DONE
 |===
 
-`cargo test --workspace` — zero failures across all test suites.
+`cargo test --workspace`: zero failures across all test suites.
 
 == What came next
 
 . *User validation* of `feat/heal-merge-engine` before push.
-. *`--propose` store-open hoisting* — currently one fjall open per event (~250ms each);
+. *`--propose` store-open hoisting*: currently one fjall open per event (~250ms each);
   hoist to once per `--propose` invocation (deferred from Phase 5 notes).
-. *`apply_merge_to_store` NoContractChanges edge case* — pure metadata-only changes
+. *`apply_merge_to_store` NoContractChanges edge case*: pure metadata-only changes
   (same doc comment, only body changed) produce empty actions.  Needs a `put_base_snapshot`
   call even when actions is empty but source_hash differs.
-. *ADR-005 footprint/init redesign* — `.aden/config.toml`, `aden init`, self-contained
+. *ADR-005 footprint/init redesign*: `.aden/config.toml`, `aden init`, self-contained
   `.aden/.gitignore`.
 
 '''

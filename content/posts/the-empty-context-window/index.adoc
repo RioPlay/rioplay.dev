@@ -4,8 +4,9 @@ slug: "the-empty-context-window"
 date: 2026-06-09
 lastmod: 2026-06-09
 draft: false
+weight: 8
 summary: "Aden's ask command was routing questions to the right symbol and then assembling almost nothing into the answer. A 4,115-token budget came back holding 22 tokens. The graph found the right node; the context around it was empty. This is why that happens, and the three-layer fix that filled the window without overrunning it."
-description: "An Aden engineering log: ask routed correctly but assembled 0.5% density. The fix in three layers — render repairs, budget-aware source hydration, and an escalation ladder — plus the eval gates that hold density above a floor without breaking the budget-honesty guarantee."
+description: "An Aden engineering log: ask routed correctly but assembled 0.5% density. The fix has three layers: render repairs, budget-aware source hydration, and an escalation ladder. The eval gates hold density above a floor without breaking the budget-honesty guarantee."
 series: ["Aden"]
 categories: ["Aden"]
 tags: ["aden", "ai-tooling", "developer-tools", "knowledge-graph", "context-assembly", "retrieval", "rust"]
@@ -128,4 +129,4 @@ _This work happened across one long day; the raw account is in the link:/devlog/
 == Sources
 
 . Aden source: the https://github.com/RioPlay/aden[Aden repository^], specifically `crates/aden-asm/src/traverse.rs` (render repairs and source hydration), `crates/aden-graph/src/cache.rs` (caller folding and hub gating), `crates/aden-cli/src/commands/query.rs` (the escalation ladder and community broadening), and `scripts/eval_ask_density.py` (the density and immediacy eval harness).
-. The xref:../../glossary.adoc[site glossary] defines and sources every term used above. This site is built with https://asciidoctor.org[Asciidoctor^].
+. The link:/glossary/[site glossary] defines and sources every term used above. This site is built with https://asciidoctor.org[Asciidoctor^].

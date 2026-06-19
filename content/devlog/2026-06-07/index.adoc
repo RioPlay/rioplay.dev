@@ -17,7 +17,7 @@ A full working session: AsciiDoc parser upgrades, the `aden licenses` polyglot r
 research gap-analysis topic, a retrieval eval harness + M14 coverage boost, and the start of
 hybrid retrieval.
 
-== AsciiDoc parser upgrade — commit `8ec27ab`
+== AsciiDoc parser upgrade (commit `8ec27ab`)
 
 Driven by analysing the research knowledge base (which is authored in AsciiDoc). Found and
 fixed that `parse_document_attributes` was a no-op for real documents (it required the source
@@ -26,15 +26,15 @@ to start with `:`, but real docs start with `= Title`).
 * Capture `:tags:`, `:status:`, `:updated:`, and all custom header attributes into
   `Document.attributes` → now searchable and filterable.
 * With `:sectanchors:`, emit an Asciidoctor-compatible `_slug` alias anchor alongside aden's
-  `h<level>slug` form so `xref:file#_heading` links resolve.
-* Extract `xref:path#fragment[text]` and reduce file-qualified `<<file.adoc#anchor>>` to its
+  `h<level>slug` form so `+xref:file#_heading+` links resolve.
+* Extract `+xref:path#fragment[text]+` and reduce file-qualified `+<<file.adoc#anchor>>+` to its
   fragment → cross-document references become `RelatesTo` edges. The edge linker now also
   indexes doc section anchors by their trailing fragment so these targets resolve.
 
 Verified end-to-end on the research base: tags surface in search, sectanchors aliases
-generate, and citation backlinks (e.g. `<<sources.adoc#kit-pricing>>`) resolve.
+generate, and citation backlinks (e.g. `+<<sources.adoc#kit-pricing>>+`) resolve.
 
-== `aden licenses` polyglot — commit `06acc0e`
+== `aden licenses` polyglot (commit `06acc0e`)
 
 Moved license accreditation out of `misc.rs` into a dedicated `licenses.rs`: detects Cargo,
 npm, PyPI, and Go ecosystems and resolves licenses local-first. Fixed Go module versions
@@ -44,53 +44,53 @@ finished + corrected it.)
 == Research: aden capability-gap analysis
 
 Created `the research notes/topics/aden-roadmap/` (index, capability-gaps, sources,
-glossary) — a cited gap analysis vs. the 2026 code-intelligence field, rendered into the
+glossary): a cited gap analysis vs. the 2026 code-intelligence field, rendered into the
 site. Used 3 parallel agents (two authoring, one adversarially fact-checking claims against
 aden's source). Headline, verified against the code: *aden retrieval is pure BM25 + graph
-traversal — zero embeddings, RRF, git-awareness, or community detection.*
+traversal. Zero embeddings, RRF, git-awareness, or community detection.*
 
 Principle established: adopt standard *published* techniques implemented from their original
 papers (cite the paper in code), never copy competitor source; permissive crates OK with
 attribution.
 
-== Retrieval eval harness + M14 coverage boost — commit `249720e`
+== Retrieval eval harness + M14 coverage boost (commit `249720e`)
 
 Per "measure, don't guess," built the harness *first*.
 
-* `crates/aden-index/tests/eval.rs` — fixture corpus + 12-query Recall@1/@5/MRR report,
+* `crates/aden-index/tests/eval.rs`: fixture corpus + 12-query Recall@1/@5/MRR report,
   a test proving the coverage boost does real work, and the M14 rare-verb case kept as an
   `#[ignore]`d executable record of what hybrid retrieval must fix.
-* Coverage boost in `aden-index::query()` — `1 + COVERAGE_WEIGHT*(k-1)` with
+* Coverage boost in `aden-index::query()`: `1 + COVERAGE_WEIGHT*(k-1)` with
   `COVERAGE_WEIGHT=1.0` (multiplier = coordination level; a principled value, not tuned).
   Computed from existing postings → no `CURRENT_INDEX_VERSION` bump.
 
 *What we learned (the important bit):* the harness PROVED that a coverage boost alone cannot
-fix the core M14 case — when the rare-verb distractor also matches a common query term
+fix the core M14 case: when the rare-verb distractor also matches a common query term
 (real `detect_node_type` matches `detect` + `anchor`), coverage ties with the right answer
 and the rare verb wins on IDF. A coverage-only "fix" would have been a no-op against real
 M14. This is a structural limit of lexical-only retrieval → deferred to hybrid retrieval
 rather than band-aided with a hardcoded verb list.
 
-Validation: full workspace 34 suites green; dogfooded — `ask "how are orphan anchors
+Validation: full workspace 34 suites green; dogfooded: `ask "how are orphan anchors
 classified"` → `classify_orphans` (correct).
 
-== Hybrid retrieval (Gap 1) — fusion core landed (uncommitted)
+== Hybrid retrieval (Gap 1): fusion core landed (uncommitted)
 
 The real M14 fix and the headline capability. Built the *deterministic fusion core first*,
 pure Rust, before committing to any ONNX runtime + model blob:
 
-* `EmbeddingProvider` trait (deterministic by contract) — the seam that keeps the heavy
+* `EmbeddingProvider` trait (deterministic by contract): the seam that keeps the heavy
   model dependency out of the core and swappable.
-* `cosine_similarity` + `rrf_fuse` (Reciprocal Rank Fusion, Cormack et al. SIGIR 2009 —
+* `cosine_similarity` + `rrf_fuse` (Reciprocal Rank Fusion, Cormack et al. SIGIR 2009,
   cited in the code; uses ranks only, so it's robust to score-scale + cross-platform float
   drift).
-* `Index::{embed_documents, dense_query, hybrid_query, has_embeddings}` — vectors stored
+* `Index::{embed_documents, dense_query, hybrid_query, has_embeddings}`: vectors stored
   per-anchor (new `embeddings` field → `CURRENT_INDEX_VERSION` 6→7); flat cosine (no ANN
   randomness = deterministic); `hybrid_query` fuses BM25 + dense via RRF and *degrades to
   pure BM25 when no embeddings are present*, so it's always safe to call.
 
 Tests (`crates/aden-index/tests/hybrid.rs`, 5 passing): cosine math, RRF blend +
-determinism, BM25 fallback, and the signature win — `hybrid_surfaces_semantic_match_with_no_shared_terms`
+determinism, BM25 fallback, and the signature win: `hybrid_surfaces_semantic_match_with_no_shared_terms`
 (a query with zero tokens in common with the target doc is surfaced via the dense signal,
 which BM25 provably cannot do). Honest scope: this proves the *mechanics*; whether a real
 model resolves M14 on real data is measured later by the eval harness once the model lands.
@@ -102,10 +102,10 @@ Validation: full workspace 35 suites green; clippy clean.
 A background agent compared `fastembed`/`ort`/`candle`/`tract`/`rust-bert` and small models.
 *Decision: `tract` (sonos) + `BAAI/bge-small-en-v1.5` int8 ONNX (384-dim).*
 
-* `tract` — pure Rust, Apache-2.0/MIT, *no native C++ runtime*, deterministic by
+* `tract`: pure Rust, Apache-2.0/MIT, *no native C++ runtime*, deterministic by
   construction (self-contained kernels, no BLAS/threadpool nondeterminism). Best fit for
   aden's offline + deterministic + small-footprint constraints.
-* `bge-small-en-v1.5` — MIT, ungated, 384-dim, ~25–35 MB int8 (bundleable in-repo).
+* `bge-small-en-v1.5`: MIT, ungated, 384-dim, ~25–35 MB int8 (bundleable in-repo).
 * Fallback if a tract ONNX-op gap blocks the model: `fastembed` (pulls the ONNX Runtime
   native lib; force single-thread for determinism).
 * No GPL landmines; all candidates MIT/Apache-2.0, AGPL-compatible.
@@ -116,25 +116,25 @@ A background agent compared `fastembed`/`ort`/`candle`/`tract`/`rust-bert` and s
 Known risk to spike next: confirm tract loads the exact exported bge-small ONNX graph
 (tract covers ~85% of ONNX ops; it ships a working BERT example).
 
-== Spike SUCCEEDED — tract loads bge-small (the key unknown is resolved)
+== Spike SUCCEEDED: tract loads bge-small (the key unknown is resolved)
 
 Implemented the real provider `TractEmbedder` (`crates/aden-index/src/dense.rs`, behind
 the `dense` feature) and ran it against the downloaded bge-small-en-v1.5 ONNX:
 
-* tract 0.23 loads the exported BERT graph fine (the one research-flagged risk — gone).
+* tract 0.23 loads the exported BERT graph fine. The one research-flagged risk is resolved.
 * 384-dim, L2-normalized, deterministic. CLS-token pooling (confirmed from the model's
-  `1_Pooling/config.json` — NOT mean pooling, which the research had assumed).
+  `1_Pooling/config.json`; NOT mean pooling, which the research had assumed).
 * Semantic sanity (spike test `tests/dense_spike.rs`): for an auth query,
   `cosine(query, "validate bearer credential session") = 0.73` vs
-  `cosine(query, "average document length") = 0.42` — strong, correct separation.
+  `cosine(query, "average document length") = 0.42`. Strong, correct separation.
 
 Implementation notes: inputs `input_ids`/`attention_mask`/`token_type_ids` (i64, fed in the
 graph's declared order); fixed [1,512] padding so the graph optimizes once (per-embed is a
-512-token forward — fine for now, optimize later via bucketing/symbolic dims). tokenizers
-uses the **pure-Rust `fancy-regex`** backend (MIT), NOT the native `onig` C lib — keeps the
+512-token forward; fine for now, optimize later via bucketing/symbolic dims). tokenizers
+uses the **pure-Rust `fancy-regex`** backend (MIT), NOT the native `onig` C lib. Keeps the
 stack dependency-light and offline.
 
-License: re-verified with the `dense` tree — `fancy-regex` is MIT; the only copyleft is
+License: re-verified with the `dense` tree. `fancy-regex` is MIT; the only copyleft is
 still the two AGPL-compatible MPL-2.0 crates (`dyn-eq` new from tract, `option-ext`
 pre-existing via `dirs`). Default build (no `dense`) unaffected: all aden-index tests green.
 
@@ -148,14 +148,14 @@ embeddings in `load_or_build_index` (cache + build paths, re-saving), and a new
 
 *Real-data result for "how does the scanner detect orphan anchors":*
 
-* BM25-only (today): ranks `aden-graph/graph.rs#detect_node_type` **#1** (1356) — the M14
-  defect, the irrelevant rare-verb match winning.
+* BM25-only (today): ranks `aden-graph/graph.rs#detect_node_type` **#1** (1356). This is
+  the M14 defect, the irrelevant rare-verb match winning.
 * Hybrid (dense+RRF): `detect_node_type` is **gone from the top**; the orphan-handling
   functions `AdenGraph::orphans` and `classify_orphans` surface in the top results instead.
 
-So hybrid *fixes the M14 symptom on real data* — the rare verb no longer dominates. Honest
+So hybrid *fixes the M14 symptom on real data*: the rare verb no longer dominates. Honest
 nuance: RRF brings its own quirks (e.g. `is_test_anchor`, which is strong in BOTH retrievers,
-floats to the top), so ranking quality needs tuning (RRF `k`, BM25-vs-dense weighting) — which
+floats to the top), so ranking quality needs tuning (RRF `k`, BM25-vs-dense weighting). That
 is exactly what the eval harness is for. Don't claim M14 "fixed" until a real-data harness
 measures it and we tune; only then flip the `#[ignore]`.
 
@@ -163,7 +163,7 @@ Perf: the first full-corpus embed timed out at fixed-512; fixed by `MAX_SEQ` 512
 docs are short) + parallelizing `embed_documents` with rayon (`EmbeddingProvider: Sync`). The
 corpus now embeds and the query returns.
 
-Cosmetic: `search` prints RRF fused scores as `0.0` (they're ~1/(60+rank) ≈ 0.016) — display
+Cosmetic: `search` prints RRF fused scores as `0.0` (they're ~1/(60+rank) ≈ 0.016). Display
 polish needed for hybrid mode (show rank or scale).
 
 == Measured: hybrid resolves M14 on the eval (real model)
@@ -173,13 +173,13 @@ Added a gated `hybrid_retrieval_eval_with_real_model` test (`tests/eval.rs`) tha
 corpus. Result:
 
 * *R@1: BM25 0.917 → hybrid 1.000*; MRR 0.958 → 1.000. Zero regressions.
-* *M14 `detect orphan anchors`: `scan_orphans` now #1, `detect_node_type` → #2* — the flip.
+* *M14 `detect orphan anchors`: `scan_orphans` now #1, `detect_node_type` → #2.* The flip.
   This is now a HARD assertion (the M14 gate). The BM25-only `m14_rare_verb_does_not_dominate`
   test stays `#[ignore]`d as the documented pure-lexical limitation; the hybrid test is where
   M14 is proven resolved.
 
 So M14 is *measured-resolved* on the controlled eval. The earlier full-corpus run showed RRF
-still has top-of-list quirks on noisy real data (`is_test_anchor` floating up) — that's the
+still has top-of-list quirks on noisy real data (`is_test_anchor` floating up). That's the
 remaining *tuning* (RRF `k` / weighting / deprioritize test anchors in the dense path), not a
 correctness gap.
 
@@ -189,42 +189,42 @@ correctness gap.
 magnitude-adaptive `fmt_score` (1 decimal for large BM25 scores, 4 for sub-1.0 RRF scores).
 Display-only.
 
-== Attempted RRF tuning, then REVERTED — an overfitting lesson (`4dd0251` → `b301439`)
+== Attempted RRF tuning, then REVERTED: an overfitting lesson (`4dd0251` → `b301439`)
 
 I tried weighting dense above BM25 (×3.0) based on an 8-query real-aden-corpus probe that
 *appeared* to improve top1 6/8→7/8. On a *clean* rebuild it did not reproduce, and a proper
 A/B showed unweighted RRF beats ×3.0 (top1 6/8 vs 4/8); ×3.0 was no better than BM25 alone.
 **Reverted the weighting.**
 
-Two reasons the real-corpus probe was invalid — both worth remembering:
+Two reasons the real-corpus probe was invalid (both worth remembering):
 
 . *Stale index cache.* `load_or_build_index` has no freshness check, so the first "7/8" was
   read off an inconsistent cached corpus.
 . *Self-referential corpus.* aden indexes its OWN source, so the fusion code
   (`rrf_fuse`/`dense_query`/`hybrid_query`, dense with "rank/fuse/bm25/dense/anchor") matches
-  the probe queries — and *changing the weight edits a file that is in the corpus*. Rankings
+  the probe queries, and *changing the weight edits a file that is in the corpus*. Rankings
   shift run-to-run; you cannot A/B fusion params on the live aden corpus.
 
 *Lesson (this is exactly the overfitting trap):* tune ONLY against the hermetic fixture eval
 (`hybrid_retrieval_eval_with_real_model`), never the self-referential live corpus. That
-fixture is deterministic and shows *unweighted* hybrid at R@1 1.0 with the M14 flip — which is
+fixture is deterministic and shows *unweighted* hybrid at R@1 1.0 with the M14 flip. That is
 the result we keep. The earlier "7/8" claim is retracted.
 
 == Model delivery: fetch-on-demand (commit `c14725e`)
 
 Decided NOT to bundle via Git LFS. Verified tract cannot load quantized (int8) or fp16
-exports of bge-small (both panic on load), so the model is the fp32 graph (~127 MB) — too big
+exports of bge-small (both panic on load), so the model is the fp32 graph (~127 MB). Too big
 to put in every clone for an opt-in feature. Chose a fetch script (`scripts/fetch-bge-model.sh`):
 curl-based, checksum-pinned (sha256), idempotent, writes the model's MIT license alongside.
-aden itself stays network-free (the script is the only thing that hits the network, only when
-run — one-time setup, like installing the binary; runtime stays offline). Air-gapped users
+aden itself stays network-free. The script is the only thing that hits the network, only when
+run (one-time setup, like installing the binary; runtime stays offline). Air-gapped users
 place the files manually (`ADEN_BGE_MODEL_DIR`). README documents the optional `dense` feature.
 
 == Perf pass: symbolic sequence length (commit `e6a2cff`)
 
 Replaced the fixed-128 padded input shape with a SYMBOLIC sequence dimension
 (`model.symbols.sym("S")`), so one optimized tract graph runs each text at its actual token
-count — short symbol docs no longer pad to 128. Truncation cap stays 128 (same quality);
+count. Short symbol docs no longer pad to 128. Truncation cap stays 128 (same quality);
 embeddings are byte-identical (spike 0.7305/0.4248 unchanged). Clean full-corpus embed
 ~95s wall (was ~213s when I briefly raised the cap to 512). One-time cost, cached after. All
 dense tests green; clippy clean.
@@ -232,7 +232,7 @@ dense tests green; clippy clean.
 == install.sh dense opt-in + MCP question (commit `ff6d900`)
 
 Confirmed the MCP server *spawns the installed `aden` binary* as a subprocess, so MCP routes
-through the same `query_index` (hybrid) path — *no MCP code changes needed for retrieval*. The
+through the same `query_index` (hybrid) path. *No MCP code changes needed for retrieval.* The
 only lever was the build: `install.sh` now takes `ADEN_DENSE=1` / `--dense` to install a
 hybrid-capable binary, which turns on hybrid for BOTH CLI and MCP.
 
@@ -240,11 +240,11 @@ hybrid-capable binary, which turns on hybrid for BOTH CLI and MCP.
 
 Wrote `the research notes/topics/aden-roadmap/competitive-position.adoc` (6 fresh June-2026
 sources). Read: the field converged on hybrid+graph+MCP (now table stakes); this cycle moved
-aden from *behind on retrieval* to *at parity*; aden *leads* on the uncontested square —
+aden from *behind on retrieval* to *at parity*; aden *leads* on the uncontested square:
 contract-enforced code+docs graph, fully offline + deterministic, 300+ langs; *trails* on
 adoption, query latency, and graph-analytics breadth (community detection, git-diff impact).
 
-== Git-diff impact — Gap 2 (commit `9ae72e6`)
+== Git-diff impact (Gap 2, commit `9ae72e6`)
 
 `aden impact-diff` maps a git diff to touched symbols and reports the downstream blast radius
 + a heuristic risk tier, before committing. Reused the store symbol-spans + enclosing-symbol
@@ -254,7 +254,7 @@ the MCP `impact-diff` tool (CLI↔MCP flag parity holds). Unit tests + dogfooded
 tree (main's dispatch change = widest radius; doc-only changes = zero downstream). This closes
 one of the "cheap parity gaps that reuse the existing graph" from the competitive analysis.
 
-== Community detection — Gap (commit `fc18016`)
+== Community detection (commit `fc18016`)
 
 `aden communities` groups symbols into functional clusters via deterministic multi-level
 modularity (Louvain; Blondel 2008) with a `resolution` knob (>1 = finer). CLI + MCP. Named
@@ -266,10 +266,10 @@ flat anchors) so it reads for any language.
 == Polyglot validation on a NON-Rust repo (TypeScript: create-t3-app)
 
 Per the "aden is polyglot" checkpoint, validated the two new commands on a real TypeScript
-repo (t3-oss/create-t3-app, ~10k LOC TS, 177 files) — NOT aden's own Rust:
+repo (t3-oss/create-t3-app, ~10k LOC TS, 177 files), NOT aden's own Rust:
 
 * `gen` indexed real TS symbols (`CT3APackageJSON`, `Search.tsx#Search`, `fetchGithub`, React
-  components, zod schemas) — TS tree-sitter parsing + anchoring works.
+  components, zod schemas). TS tree-sitter parsing + anchoring works.
 * `communities` clustered the TS symbols into functional groups (the `cli` package vs the
   `www` docs-site package), with the polyglot directory/project labels.
 * `impact-diff`: editing a line inside the `fetchGithub` arrow function correctly mapped to
@@ -281,11 +281,11 @@ the tool is Rust; aden's target is every codebase.
 
 == Communities wired into `ask` routing (commit `8d9adb5`)
 
-`ask`'s thin-stub fallback used to broaden to `mod-project` (flat dump of all module hubs —
+`ask`'s thin-stub fallback used to broaden to `mod-project` (flat dump of all module hubs;
 M14's poor terminal). It now broadens to the resolved symbol's *functional community*: detect
 communities, find the one containing the anchor, assemble from its hub (highest-degree real
 symbol, skipping synthetic `mod-*` nodes); `mod-project` only if no multi-member community.
-Dogfooded on the M14 query — `detect_node_type` (thin) → `aden-graph` community (138 symbols)
+Dogfooded on the M14 query: `detect_node_type` (thin) → `aden-graph` community (138 symbols)
 seeded at `DocumentNode`, the subsystem where orphan-scanning lives. Community detection runs
 only on the fallback path; happy path unchanged.
 

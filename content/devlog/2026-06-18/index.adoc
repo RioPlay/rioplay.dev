@@ -1,0 +1,544 @@
+---
+title: "Devlog: 2026-06-18"
+slug: "2026-06-18"
+date: 2026-06-18
+lastmod: 2026-06-18
+draft: false
+summary: "I tried to push the concept-graph reranker past its ceiling and found the ceiling was mostly a leak in the benchmark. Multi-hop converged early and the dictionary earned no vote over the corpus graph. What actually won: enrich what the model embeds, not what it returns."
+categories: ["Devlog"]
+tags: ["aden", "devlog"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+I tried to push the concept-graph reranker past its ceiling and found the ceiling was mostly a leak in the benchmark. Multi-hop converged early and the dictionary earned no vote over the corpus graph. What actually won: enrich what the model embeds, not what it returns.
+
+== Where the 17th left us
+
+The concept-graph reranker (corpus context-centroid nodes, consumed as a rerank,
+never an expansion) was the strongest automatic signal we'd found: *2×* the dense
+baseline (`0.14 → 0.289` MRR), beating BM25, hybrid, query expansion (six ways), and
+the OEWN-as-reranker layers. The open question for today: can we *push past* it toward
+the hand-authored oracle (`0.641`), or is `~0.29` a wall?
+
+== Multi-hop: the graph traverses, and it converges
+
+The idea (mine, and I still like it) was that a query shouldn't stop at a term's
+*direct* graph neighbours. It should **hop**: `cluster → community → louvain`, walking
+the `SimilarTo` edges until the graph stops giving anything new. Each reached node
+weighted by the *correlation product* along its path times a per-hop decay, a path
+abandoned once its weight drops below a floor: *"can no longer hop."*
+
+The depth sweep (12 probes, one snapshot):
+
+[cols="2,1,1", options="header"]
+|===
+|Arm |MRR |reached nodes
+
+|DENSE  |0.139 |n/a
+|HOP-1  |0.245 |17
+|HOP-2  |*0.285* |42
+|HOP-3  |0.283 |72
+|HOP-4  |0.283 |96
+|ORACLE |0.641 |n/a
+|===
+
+The convergence model is *exactly right*: the reached set keeps growing
+(`17 → 42 → 72 → 96`) but the score is flat from hop 2 on. Deeper traversal just
+floods, no gain, precisely as the decay-and-floor predicts. Validating cheap at depth 2
+was the correct call: depth 2 captures the whole win, and *"hop until you can't"*
+converges there.
+
+Two honest boundaries, drawn for the record. First, the `HOP-2 > HOP-1` delta (`+0.04`)
+is *within 12-probe noise* (about one probe flipping), so "multi-hop helps" is
+directional, not yet proven. Second, and this is the real one: traversal reaches the
+`~0.28` ceiling and **stops**. It does not touch the oracle gap. The probes the oracle
+solves and we miss are ones where *no corpus path connects the query to the gold card's
+jargon at any depth*. The term simply isn't reachable by similarity. That gap is
+domain knowledge, not hop count, and no amount of traversal manufactures an edge the
+corpus never wrote.
+
+== The dictionary doesn't get a vote it hasn't earned
+
+Before the ceiling, I tried the other lever: bolt the OEWN typed edges
+(`SynonymOf`/`IsA`/`PartOf`) onto the rerank. And RioPlay caught a flaw in my first cut.
+I'd *hardcoded* the edge weights from the dictionary's per-type constants. His model
+is the opposite, and it's correct: **the graph creates the weights.** Two terms that
+correlate in context get a strong edge; the correlation *is* the weight; then you write
+those derived weights out as the findings. Don't take the dictionary's word for the
+strength of a relationship. Let the graph decide it.
+
+Rebuilt that way, the result is a clean negative that *confirms the founding thesis*:
+
+[cols="2,1", options="header"]
+|===
+|Arm |MRR
+
+|DENSE |0.140
+|CONCEPT |0.289
+|+OEWN-CORR (graph sets the weight) |0.289
+|+OEWN-TYPE (hardcoded weights) |0.289
+|+OEWN-CORR≥0.90 [kept *0* of 456] |0.289
+|ORACLE |0.641
+|===
+
+The OEWN overlay adds *nothing* on top of the corpus concept graph: correlation-weighted,
+type-weighted, or gated, all `0.289`. And when the graph's own correlations set the
+weights, **every one of the 456 dictionary suggestions scored below the 0.90 bar**. The
+graph judged the generic dictionary weakly-correlated and down-weighted it to irrelevance
+on its own. The graph's corpus-derived relationships already hold what's useful; the
+dictionary, ungated and generic, doesn't earn a vote. *"Don't take the dictionary's word
+for it"*: measured, twice.
+
+== The real lever: make the graph fit language, not just the corpus
+
+So both pushes (deeper traversal, richer dictionary) hit the same `~0.28` wall. That
+points somewhere specific, and it's RioPlay's other instinct: the *graphing mechanism
+itself* is too thin. Today the whole graph is **untyped, undirected distributional
+similarity**: one node per surface term, mutual-kNN cosine edges. That captures "these
+two words feel related here." It cannot capture the *structure* of language.
+
+A research pass over the new semantic-relationship notes (six files added to the KB in
+the last day) names the keystone bluntly: **hypernymy is directed and asymmetric
+(`sparrow` IS-A `bird`, not the reverse), and aden's mutual-kNN `SimilarTo` is undirected
+and cannot represent it.** Every richer relation is some flavour of this: a *typed,
+often directed* edge that flat similarity flattens away. And there's a measured prize
+for fixing it: an oracle-expansion A/B on real symbol cards showed typed directed edges
+worth **+3/12 (25pp)** on *code* retrieval, complementary to dense (only `+1/12` on
+prose). The gain is concentrated exactly where aden lives.
+
+The prioritized evolution, grounded in the notes:
+
+. *POS-aware node typing + POS-gated edges*: give nodes a part of speech; only assert
+  `IsA`/`SynonymOf` between compatible POS. Kills the false `bark`(noun)→`bark`(verb)→`dog`
+  chains. Low-risk, no store writes. The keystone's foundation.
+. *Directed typed edges from OEWN/Wikidata*: emit the `SynonymOf`/`IsA`/`PartOf`/`AntonymOf`
+  slots that already exist in `EdgeType` but are never written. Directed `IsA` is the
+  `+3/12` lever. Gated behind WSD (wrong-sense expansion is *strictly* harmful, Gonzalo's
+  1998 law), and the WSD gate is exactly our graph-context-gating idea.
+. *Refinements on that spine*: meronymy subtypes (so transitive closure doesn't lie),
+  sense-splitting (one node per sense, not per spelling), `ConverseOf` for `buy`/`sell`
+  perspective duals, `UsedFor`/`CreatedBy` from qualia structure.
+
+The through-line: stop modelling language as a cloud of similar points and start
+modelling it as what it is: a *typed, directed* structure. The concept graph proved the
+substrate is real; making it linguistic is how the ceiling moves.
+
+== Building the keystone, and finding the floor under it
+
+Built it: a dry-run producer that lays directed `IsA`/`PartOf` (noun-gated) and undirected
+`SynonymOf` (same-POS) over the corpus concepts from the OEWN lexicon, every edge gated by
+context-centroid correlation. The gates fire cleanly. `IsA`: 5,780 offered → 2,514
+POS-dropped → 2,156 off-corpus → 58 WSD → *1,015 kept*, 99% asymmetric (the direction is
+real). On paper, the keystone.
+
+Then I read the edges it kept, and they're *wrong*: `work IsA use`, `build IsA make`,
+`call IsA read`. Not hypernymy: verb-sense troponymy leaking into noun nodes. And it doesn't
+go away by gating harder: a lemma node conflates *every sense* of a surface word, and English
+noun/verb ambiguity (`work`, `use`, `make` are all both) means a "noun" node still carries its
+verb edges. The context-correlation WSD gate can't save it either. Those words co-occur
+constantly in code, so they correlate `~1.0`. *Correlation is not hypernymy.*
+
+So the build's real product is a finding: **POS-typing at the lemma level is necessary but
+nowhere near sufficient.** You cannot carry clean directed edges on a graph where `work`(noun)
+and `work`(verb) are the same node. The keystone is a level deeper than I drew it. It's
+**sense-splitting**: one node per *sense*, not per spelling. That is exactly the Priority-4
+dependency the research flagged, now proven empirically rather than predicted. And it
+re-explains the earlier "dictionary inert" result from the inside: those edges were never going
+to land while the nodes they attach to are sense-blind.
+
+== What came next
+
+. *Sense-splitting, the true keystone*: one node per OEWN sense (`SenseOf`/`FormOf` back to
+  the lemma), edges scoped to the sense, senses mapped to corpus contexts. The dict-contextualize
+  dry-run already showed sense-scoping is feasible (`stream` → two noun senses, distinct
+  hypernyms). Directed typed edges only mean something on top of this.
+. *Escape the 12-probe noise floor*: every delta this small is one probe wide. More
+  probes (or a second corpus) is what turns "directional" into "proven."
+. *Then re-run multi-hop on the typed graph*: traversal saturated on *untyped* edges; a
+  directed, typed graph is a different object to walk, and the convergence question is
+  worth re-asking once the edges mean something.
+
+== Correction: the eval was leaking, and it flipped two conclusions
+
+Before building further, RioPlay made the right call: validate the differentiating pieces
+for BS logic. The logic was sound. But the *eval corpus* was contaminated, and that
+inflated the headline numbers and inverted a key finding.
+
+The retrieval harnesses read the whole `.aden/store`, which indexes `crates/*/tests/`. Those
+test cards pair each probe *query* with its gold *symbol name* in a single card (the `probes`
+arrays). So the concept graph was learning the query→answer association straight from the test
+files. *Reading its own answer key.* Excluding `/tests/` (~451 cards, 13% of the corpus) gives
+the honest picture:
+
+[cols="3,1,1", options="header"]
+|===
+|Arm |Leaked |Clean
+
+|DENSE |0.140 |0.161
+|concept-rerank (direct) |0.289 |*0.185*
+|multi-hop (HOP-2) |0.285 |0.240
+|+OEWN typed edges |0.289 |*0.279*
+|ORACLE |0.641 |0.646
+|===
+
+Two conclusions from earlier in this log (and the 17th) are now corrected:
+
+* **The "~0.29 concept-rerank ceiling" was mostly leak.** Clean, the direct concept-rerank
+  lifts dense only `0.161 → 0.185` (+15%, not the +105% the sweep reported). The big lift was
+  the graph reading test cards that contained the answers.
+* **"Dictionary inert" flips, it's the leak's mirror image.** Clean, the OEWN typed edges are
+  the *biggest* automatic lever: `0.182 → 0.279` (+53%). They looked inert only because the
+  leaked graph already held the answers. Remove the leak and the dictionary (the "fit language"
+  direction) is what moves the number most.
+
+What *survives*, now on clean ground: **multi-hop still helps and still saturates at depth 2**
+(`HOP-1 0.180 → HOP-2 0.240`, then flat). And traversal matters *more* once the graph isn't
+cheating. The honest ranking of levers: `OEWN (0.279) > multi-hop (0.240) > direct rerank
+(0.185) > dense (0.161)`, all still short of the oracle (0.646). Oldest lesson in the playbook:
+*measure on a corpus that doesn't contain the answer key.* The five harnesses now exclude
+`/tests/`; the logic was never the problem.
+
+== The expanded benchmark: dense wins, the levers don't generalize
+
+The 12-probe set was the root of every shaky claim, so we 3.3×'d it: 28 fresh probes mined via
+aden (real symbols, gold verified, queries de-leaked), behind a self-audit that fails loud on
+any probe whose query shares a token with its answer or whose gold is absent from the corpus.
+Clean run, 40 probes, audit `0 leaks, 0 dead`:
+
+[cols="2,1,1,1", options="header"]
+|===
+|Arm |MRR |R@1 |R@5
+
+|DENSE    |*0.281* |8 |15
+|CONCEPT  |0.231 |5 |14
+|MH-MAX   |0.265 |7 |14
+|MH-ACCUM |0.239 |6 |13
+|OEWN     |0.249 |6 |15
+|OEWN+MH  |0.252 |6 |14
+|ORACLE   |0.443 |15 |21
+|===
+
+The honest verdict: **no graph reranker beats plain dense.** The best (multi-hop, best-path
+weighting) roughly breaks even; everything else degrades it. The reason is mechanical and fair.
+Unconditional reranking *demotes* the golds dense already ranks well, and on a representative set
+the easy majority outnumbers the hard tail where relations help. The earlier +53%/+105% was the
+compounding of two artifacts: the test-card leak, and a hard, non-representative 12-probe sample
+that happened to be exactly where relations shine.
+
+And the question that motivated the expanded run: does *accumulated* path mass (reward nodes many
+paths converge on) beat *best-path*? **No, it's worse** (`0.239` vs `0.265`). Convergence rewards
+graph *hubs* (generic, well-connected, usually irrelevant nodes): the classic PageRank-hub
+failure. The richer weighting added noise, not signal.
+
+What stands, honestly: dense (bge-small) is a strong baseline; the oracle shows real headroom
+(`0.443`); and our graph reranking, *as an unconditional layer*, doesn't capture it. It would
+have to be **confidence-gated** (fire only when dense is uncertain) to stop hurting the cases
+dense already gets right. That, or the lever isn't reranking at all. The session's real product
+was the method that found this: a leak audit and a probe set big enough to trust.
+
+*Update: gate tested, gate ties.* Built exactly that, with the gate *derived from the data*:
+confidence = the dense top-1/top-2 margin, cutoff = the *median margin across the query set*
+(plus a threshold-free soft variant that fades the boost by confidence). Result: `GATE-HARD
+0.283`, `GATE-SOFT 0.283` vs `DENSE 0.281`. A tie. Gating *does* prevent the harm (the
+unconditional rerankers' `0.23–0.27` climb back to dense), which confirms the mechanism
+(reranking was demoting golds dense already ranked), but the relations don't net-add even on the
+uncertain half. That closes the reranking thesis honestly: on this corpus `bge-small` is strong
+enough that graph reranking, gated or not, doesn't beat it. **The graph's edge is structure and
+reasoning (blast-radius, traversal, typed relations), not out-ranking dense.** Which is where
+aden was always strongest; retrieval reranking was the detour, and now we know its ceiling.
+
+== The doc side: the graph finally beats dense
+
+Every lever so far reordered dense's *output* and lost. The untried class was the *input*: don't
+rerank, change what dense embeds. So we folded each symbol card together with the gist of its
+graph neighbours (its callers and callees, straight from aden's own graph) and re-embedded. A
+function is now represented by what it does *and its role in the system*.
+
+[cols="2,1,1", options="header"]
+|===
+|Arm |MRR |R@5
+
+|DENSE      |0.281 |15
+|DENSE-CTX  |*0.305* |16
+|ORACLE     |0.443 |21
+|===
+
+`0.305` vs `0.281`, the **first automatic mechanic in the whole session to scale past dense**, on
+the same clean, leak-audited 40-probe set. No query-side trick, no dictionary, no hand-tuning;
+purely the graph enriching the representation, exactly the "naturally generated" direction. It's
+modest (~1 probe) and the graph here is sparse (avg 3.5 neighbours/card), which is the *encouraging*
+part: a denser graph (more typed edges, the sense-split structure, prose↔code links) has more
+context to fold in, so `0.305` is a floor, not a ceiling.
+
+So the honest arc resolves: query-side post-processing of dense is a dead end (six ways), but the
+graph's structure improving the *embedding* is where it pays. aden's edge was never out-ranking
+dense after the fact. It's making the thing dense indexes carry its context. That's "fit language
+as a whole" made concrete: **the graph is a representation-enricher, not a reranker.** The detour
+through reranking was worth it: it's how we learned which side of the pipeline the graph belongs on.
+
+== Doc-side enrichment, iterating to the ceiling
+
+Having found the lever (enrich the embedding from the graph), the job is to climb it until it
+plateaus. Each pass is run clean (leak-audited, `/tests/`-filtered, 40 probes); the baseline to
+beat is dense `0.281`, the upper bound is the oracle `0.443`.
+
+[cols="1,3,1", options="header"]
+|===
+|Pass |Recipe |MRR
+
+|0 |DENSE baseline |0.281
+|1 |graph-context, all edges, 6+6 nbrs, 140-char heads (CTX-ALL) |*0.305*
+|1 |…call-edges only (Calls/Uses/Implements/Extends) |0.282
+|1 |…own text 2× (anti-dilution) |0.304
+|2 |more breadth: 24 nbrs, 320-char gists |0.304
+|2 |depth-2 reach (neighbours-of-neighbours) |*0.312*
+|3 |depth-3, and a wider depth-2 |0.312
+|n/a |ORACLE (hand expansion) |0.443
+|===
+
+*Pass 1 finding.* Two probes of the recipe space, both informative. Restricting to call edges
+*collapses the lift back to dense* (`0.282`), so the signal is in the `Documents`/`Contains`
+edges (a symbol's doc text and its sibling symbols), not its call graph. And doubling the own
+text changes nothing (`0.304`). The lift is **not dilution-bound, it's coverage-bound**: the
+graph here is sparse (3.5 neighbours/card), so the constraint is *how much relevant context we
+can fold in*, not crowding-out. Direction set for pass 2: **more context, not cleaner context.**
+
+*Pass 2 finding.* Sharper: it's depth, not breadth. Piling on more neighbours and longer gists at
+depth-1 saturates (`0.304`), but reaching to depth-2 (neighbours-of-neighbours, the transitive
+context) lifts to `0.312`, a new best. The multi-hop reach that *failed* as a query-side reranker
+pays off as doc-side context.
+
+*Pass 3 finding.* The structural graph is exhausted at `0.312`: depth-3 and a wider depth-2 both
+tie depth-2, so the call/contains/documents edges have given all they have, and depth saturates at
+2 (the same convergence the query-side multi-hop showed). Climbing further needs a *different kind*
+of context, not more of the structural graph. Pass 4 turns to the lexical layer (OEWN synonyms of
+a card's terms, folded in doc-side): the dictionary that was inert as a query-side reranker may
+earn its keep as card vocabulary.
+
+== The GPU sidecar, and the lever we were missing
+
+To accelerate the doc-side passes I built a GPU sidecar: dump the clean corpus to JSON
+(`dump_corpus`), then run the SAME bge-small `model.onnx` on CUDA via onnxruntime-gpu
+(`scripts/gpu_eval.py`), reproducing the harness recipe exactly (CLS pooling, L2-norm,
+depth-2 BFS, 120-char gists). A full lever pass dropped from ~8 minutes on tract-CPU to
+~100 seconds on the RTX 5080. But the first job of a faster ruler is to re-measure, and it
+found something bigger than the graph passes did.
+
+The sidecar swept the embedding sequence length:
+
+[cols="2,1,1", options="header"]
+|===
+|Arm |maxlen 128 |maxlen 512
+
+|DENSE   |0.333 |*0.396*
+|CTX-D2  |0.344 |0.390
+|ORACLE  |0.478 |0.574
+|===
+
+Two things fall out, and they reframe the session. First, *sequence length is the dominant
+lever.* aden's `dense.rs` caps every card at 128 tokens; lifting that to 512 (the model's
+real limit) takes dense from `0.333` to `0.396`, a bigger jump than the entire doc-side
+climb (`0.281` to `0.312`). The cap was a soft truncation, not an architectural limit (the
+tract graph runs a symbolic sequence dim), so it is a one-line change, now exposed as
+`ADEN_MAX_SEQ` (default still 128, so offline-CPU `gen` cost is opt-in). Second, and
+humbling: *at 512 the graph enrichment no longer helps* (`0.390 < 0.396`). The doc-side win
+was real, but it was partly compensating for a truncated baseline; give dense the full card
+and it does not need the neighbour context.
+
+There is also a residual I cannot fully explain yet and will not paper over: at the same 128
+cap, aden's tract path scores `0.281` while the onnxruntime path scores `0.333`, even though
+the tokenizer (HF `tokenizer.json`) and pooling (CLS + L2) match in the code. That 0.05 gap
+points to a tract numerical or graph-optimization difference, a second lever worth chasing.
+
+The honest redirect: the biggest retrieval win available is not more graph cleverness, it is
+the embedder. Raise the token cap, chase the tract gap, and (the strategic one) give aden an
+optional onnxruntime-gpu embedder backend so GPU users can afford 512-token embeddings, which
+tract-on-CPU cannot. The sidecar proves that backend loads and runs on this hardware. The
+graph's role narrows to where it is uniquely strong (structure and reasoning); the retrieval
+ceiling moves by fixing the ruler, not the rearranger.
+
+== Sequence length has a sweet spot (256), and the graph comes back
+
+A finer sweep (64/128/256/512) found quality is not monotonic in token count:
+
+[cols="1,1,1,1", options="header"]
+|===
+|maxlen |DENSE |CTX-D2 |ORACLE
+
+|64  |0.003 |0.003 |0.008
+|128 |0.333 |0.344 |0.478
+|256 |*0.415* |*0.438* |0.571
+|512 |0.396 |0.390 |0.574
+|===
+
+Three reads. (1) Quality PEAKS at 256, not 512: dense `0.415` at 256 vs `0.396` at 512.
+Past ~256 the trailing content (call listings, long tails) dilutes the CLS vector more than
+it adds, so the sweet spot for `ADEN_MAX_SEQ` is 256, which is also only 2x the 128 cost,
+not 4x. (2) The graph enrichment is NOT dead after all: at 256 it helps again, `CTX-D2 0.438
+> DENSE 0.415`. It hurt only at 512, where dilution dominates. So the best automatic config
+is 256-token embeddings plus depth-2 graph context (`0.438`), well above where we started
+(aden's 128-token `0.281`). (3) At 64 everything collapses to ~0, which is itself a finding:
+the first ~64 tokens of a card are AsciiDoc boilerplate (header, attributes), not content, so
+a too-short window embeds structure, not meaning. That points to a third lever: strip the
+boilerplate before embedding so the window spends its budget on content.
+
+Net: the path forward is the embedder, and it has a clean recipe now. Cap at 256, fold in
+depth-2 graph context, and (next) clean the card text. The graph keeps its seat, just on the
+doc side and at the right sequence length.
+
+== Correction: the baseline was noisy, and it deflates most of the wins
+
+The discipline that paid off all session paid off again: before trusting the embedder
+numbers, check what aden ACTUALLY embeds. It does not embed `emit_document`. Its production
+dense path runs `stable_embed_text`, which drops the volatile provenance attrs (`:start_byte:`,
+`:end_byte:`, `:start_line:`, `:end_line:`, `:source_hash:`, `:last-verified:`). My harnesses
+embedded `index_text` (emit_document minus only `:last-verified:`), so they fed the byte/line/
+hash noise straight into the model. The weak baseline was self-inflicted.
+
+Re-run against the faithful `stable_embed_text` projection:
+
+[cols="1,1,1,1", options="header"]
+|===
+|maxlen |DENSE-RAW (harness) |DENSE-STABLE (production) |DENSE-STRIP (aggressive)
+
+|128 |0.333 |0.361 |0.372
+|256 |0.415 |0.402 |0.416
+|512 |0.396 |0.356 |0.415
+|===
+
+What this corrects, honestly:
+
+* aden's real dense baseline is ~`0.36` to `0.40`, not the `0.28` I kept quoting. The
+  "embedder leaves 40% on the floor" framing was mostly my harness embedding noise that
+  production already strips.
+* The RAW/STABLE/STRIP gaps are mostly within 40-probe noise (R@1 swings of 1 to 3). The one
+  clear effect: aggressive stripping helps at LONG windows (512: STRIP `0.415` vs STABLE
+  `0.356`), where more boilerplate would otherwise be pulled in.
+* `maxlen` 256 stays the practical sweet spot, but the gain over a clean 128 baseline is
+  modest (`0.361` to `~0.41`), not the jump I implied.
+* The load-bearing one: on a clean baseline the doc-side graph enrichment's earlier "win"
+  largely evaporates. It was compensating for the harness's own noise.
+
+So the retrieval vein is, honestly, mostly tapped. aden's embedder is already reasonable; the
+real remaining gains are small (cap ~256; strip `:node-type:`/`:source_file:`/`[[uri]]` too,
+which mainly helps long windows) and the graph does not beat clean dense by more than noise.
+The durable products of this whole detour are the method (a leak-audited, baseline-faithful
+bench) and the GPU sidecar that makes such checks cost seconds. The lesson, twice over: measure
+what production measures, on a corpus that does not contain the answer key.
+
+== A1: the graph's blast-radius is accurate (the capability dense cannot touch)
+
+With the retrieval vein tapped, the loop turns to the graph's home turf: "what breaks if I
+change X", the callers and users of a symbol. dense embeddings cannot answer that at all; the
+graph can. So the real question is whether it answers ACCURATELY. `scripts/blast_radius_eval.py`
+measures the graph's incoming code edges (Calls/Uses/Invokes per symbol) against a
+parse-independent ground truth: a text scan of the source for real `NAME(` call sites (def and
+trait-declaration lines excluded), file-level, over the 40 gold symbols.
+
+First pass, 36 callable symbols: mean precision `1.00`, recall `0.88`. Precision was perfect, but
+the running hypothesis (method-call resolution is the gap) was wrong, and checking it before
+changing code is what saved a band-aid. The recall misses were not method-resolution failures,
+they were TEST-code callers. The dumped edges show aden does not extract call edges from
+`#[cfg(test)]` modules (the inline `tests` node carries only a `PartOf` edge, no `Calls`), and
+symbols like `embed_documents` are called only from tests. The bench's text ground truth counted
+those test call sites; aden's production extraction does not. The gap was in the BENCH, not the
+extractor.
+
+Excluding inline test code from the ground truth (matching aden's production scope), the honest
+number, 35 callable symbols: mean precision `0.99`, recall `0.98`.
+
+So the graph's blast-radius on production code is essentially perfect: it names the right callers
+and finds almost all of them. dense cannot do any of this. The only genuine residual is two
+local-variable method calls (`is_clean`, `get_incoming_edges` at 2/3), the rare case that needs
+receiver type inference, plus one design choice worth revisiting separately: aden excludes
+test-code calls, so the impact gate does not currently show "these tests break if you change X",
+which an impact gate arguably should. No `resolve_callee` change was needed, and the
+diagnosis-before-change discipline is exactly what found that. The differentiator is validated.
+
+A follow-up on that design question, because the plan was to close the test-breakage gap by
+indexing test-code calls. Scoping it first (again, before changing anything) showed that is the
+wrong move. aden DELIBERATELY excludes `#[cfg(test)]` code from the graph: the skip-test policy is
+explicit in `cmd_audit` ("track `#[cfg(test)]` modules so we can skip them: test code contains
+noise") and `discover_rust_test`, and empirically the inline `tests` node carries no `Calls`
+edges. Reversing that would pour test symbols and edges into the whole graph, polluting the
+retrieval, assembly, and community surfaces and undoing the clean production-only graph A1 just
+validated. So the gate's test-blindness is by design, not a bug. If we do want "these tests break
+if you change X", the right shape is a gate-side overlay computed at query time (a grep), kept OUT
+of the stored graph. That is two broad changes averted this session by diagnosing before building:
+the `resolve_callee` band-aid (a bench artifact) and the test-edge extraction (a deliberate design
+not to reverse). The graph stays clean; the bench keeps us honest.
+
+== Validating the "build the gate" plan: it is already built
+
+Before committing to condensing the multi-stage blast-radius into a first-class gate, we validated
+whether that gate needs building at all. It does not. `aden impact-diff` already IS the condensed
+gate, and running it on this session's own changes proves it end to end:
+
+  Git-diff impact: 8 changed files, 32 touched symbols.
+  TractEmbedder::from_dir -> 50 at-risk dependents; TractEmbedder -> 47; blast radius 57; risk HIGH.
+  Affected tests (40, run these): compound_report, concept_graph_report, ...
+
+One command maps the diff to touched symbols, walks the typed-edge graph upstream for the full
+transitive dependent set, tiers the risk, and selects the tests to run. `understand` is the same
+thing for a single symbol (definition, callers, downstream impact, context, in one shot). The A1
+bench already validated the underlying edges at precision 0.99, so the gate inherits that accuracy.
+
+Two corrections to my own earlier claims, both caught by validating instead of building:
+
+* The gate is NOT test-blind. I concluded that from the absence of `Calls` edges out of inline
+  `#[cfg(test)]` modules, but aden co-emits a separate `Tests` edge from a test to what it covers,
+  and `impact-diff` uses it: it surfaced 40 affected tests here. So "which tests break" already works.
+* The condensed gate does not need building, and neither does a test-breakage overlay. Both already
+  exist in `impact-diff`.
+
+So the validated best course is not a build, it is a PROMOTION: make `impact-diff` and `understand`
+the default lead step of the pre-edit and pre-commit flow (and the agentic loop), so "what breaks
+and which tests to run" fires before a change instead of being an optional query. The only code
+worth touching is a small display polish: the affected-tests list repeats same-named symbols like
+`load_embedder`, so qualify or dedupe them. The capability and its accuracy are already there.
+Validate before building, three times over now.
+
+== Promoting the gate: dedupe polish, then a pre-commit hook
+
+Followed the promotion through. Two commits on `feat/vocab-mismatch-evals`.
+
+First the display polish the validation called for. `impact-diff` collapsed test anchors to bare
+names, so a helper like `load_embedder` (one per harness file) repeated down the list. The runnable
+unit is the test FILE, not the helper, so the affected-tests output now groups by file, most-covering
+first:
+
+  Affected tests (40 symbol(s) across 22 file(s), run these):
+    aden-cli/tests/compound_ab.rs     (2 symbol(s))
+    aden-cli/tests/concept_graph.rs   (2 symbol(s))
+    ...
+    aden-index/tests/dense_spike.rs   (1 symbol(s))
+
+Display-only; the JSON path (full anchors) is unchanged. (commit 1e5b18f)
+
+Then the promotion itself: a `pre-commit` hook in the tracked `git-hooks/` directory that runs
+`impact-diff --staged` before every commit, so "what breaks if I change this, and which tests cover
+it" becomes the default lead step instead of a query you have to remember to run. It is
+informational and NEVER blocks: the existing `pre-push` hook owns blocking via `ci-check`, and you
+can bypass with `git commit --no-verify`. It prefers the installed `aden` binary and falls back to a
+cargo build for dev clones. No new install step is needed: the `core.hooksPath=git-hooks` that
+`install.sh` already wires activates it alongside `pre-push`. It fired live on its own commit.
+(commit 3d7c777)
+
+What is left of the promotion: making `understand` and `impact-diff` the explicit pre-edit default
+in the MCP and agent instructions, so agents lead with the gate and not just humans; and a later
+`--run-tests` flag to close the loop from "here are the tests" to "I ran them". The capability was
+already there. This work just makes it fire by default.
+
+Update, same session: the MCP default is in too. A GATE paragraph in the server instructions now
+tells agents to run `understand`/`impact-diff` before editing an existing symbol and to read the
+blast radius and covering tests first, so the gate leads for agents and not just the commit hook.
+It takes effect on MCP server restart. (commit 58c2759) That leaves only the `--run-tests`
+loop-closer, held as a real feature rather than a promotion. The gate is now the default lead step
+on both surfaces it touches: the human commit path and the agent loop.
+
+'''
+[.devlog-foot]
+This is a lightly cleaned entry from the raw link:/devlog/[Aden devlog]. The polished stories that draw on these days live in the link:/series/aden/[Aden series].

@@ -4,6 +4,7 @@ slug: "introducing-aden"
 date: 2026-06-07
 lastmod: 2026-06-07
 draft: false
+weight: 1
 summary: "Drop an AI model into a 100,000-line codebase and it guesses at which files matter, badly. I spent two weeks building Aden so it doesn't have to. Here is what it does, how it works, and the numbers behind the retrieval rewrite."
 description: "Aden compiles a codebase or documentation set into a queryable knowledge graph so coding agents can assemble exactly the context a task needs, within a token budget, fully offline. A grounded introduction with real benchmarks."
 series: ["Aden"]
@@ -22,6 +23,42 @@ Drop a capable AI model into a codebase of a hundred thousand lines and it hits 
 ====
 Aden compiles a codebase or documentation set into a queryable <<_knowledge_graph,knowledge graph>>. Every symbol becomes a node, and every call, import, and constraint becomes a typed edge. You then ask for exactly the context a task needs, within a <<_token_budget,token budget>>, fully offline, across 300-plus languages. I started it on 23 May 2026 and I write about it here as I go.
 ====
+
+== Where the idea came from
+
+The seed was not a retrieval paper. It was a half-watched video.
+
+It was one of Theo's, titled _Stop letting your agents write Markdown_. I am not sure I even made it to the end. I did not need to.
+
+Somewhere in it a thought clicked and ran off on its own. What if there is a better, under-utilized medium than Markdown? Something that gets the best of both worlds.
+
+The format we digest best is HTML. It is rich. It renders. It shows structure at a glance. But it is expensive. Every tag is a token an agent pays for and a reader's eye skips over.
+
+Markdown is the opposite. It is cheap and simple, which is exactly why everyone reaches for it. But it stops at headings and bullet points.
+
+<<_asciidoc,AsciiDoc>> sits in between, and it leans toward the rich end. It is plain text: scriptable, automatable, cheap in tokens. Yet it carries most of HTML's feature set, and it actually _renders_. Tables, admonitions, cross-references, diagrams drawn right in the document.
+
+You can drop a Mermaid flowchart into the middle of a file and have it come out as a real diagram. The ones in this very post are exactly that.
+
+That was the vision I was chasing. Save the context, and still get the full picture. The richness of HTML at the cost of plain text.
+
+Then it compounded, the way these things do. Each answer dragged the next question out behind it.
+
+If a leaner markup could save tokens on a _plan_, could the same idea improve how a model uses context in general? And if I could shape what a model reads, the real prize was not a neater document. It was _filtering_. Giving an LLM exactly the context a task needs, and nothing else.
+
+One idea pulled out the next, and the through-line kept sharpening. The medium was only step one. The goal was context, delivered precisely.
+
+The last piece came from an unlikely direction. For all the ribbing Theo gives Obsidian, Obsidian was what made the shape obvious. Notes as nodes, links as edges, a graph you can actually see and traverse.
+
+Contextualize the pieces, then graph how they connect. Point that at code instead of notes, and the original idea of Aden was there.
+
+And it did not stop at code. I was already deep in the research: papers on retrieval and ranking, graph algorithms, token budgets. It struck me that the same machinery that maps a codebase could organize _that_ too. Write it up, bundle it neatly, keep every source cited and linked.
+
+Code was only the first corpus. What I was really after was an overall context-management system, one that treats source, documentation, and research as the same structured, linkable, queryable material. It is why Aden reads prose as a first-class citizen, and why this blog, glossary and citations and all, is built on it.
+
+The whole thing bundled into one neat package. One that finally clicked for me, and hopefully clicks for you too.
+
+[.ref]#What set this off: Theo's https://www.youtube.com/watch?v=S9EGx6ik-18&t=965s[_Stop letting your agents write Markdown_^], alongside posts from https://x.com/karpathy/status/2053872850101285137[Andrej Karpathy^] and https://x.com/trq212/status/2052811606032269638[@trq212^].#
 
 == A model reading through a keyhole
 
@@ -202,4 +239,4 @@ Aden is open source under AGPL-3.0. The code, the docs, and the eval harness beh
 . Retrieval evaluation: `crates/aden-index/tests/eval_corpus.rs` and `scripts/eval_corpus.py`, run over a Linux-kernel subset and `create-t3-app`.
 . G. Cormack, C. Clarke, S. Buettcher, https://dl.acm.org/doi/10.1145/1571941.1572114["Reciprocal Rank Fusion outperforms Condorcet and individual rank learning methods," SIGIR 2009^].
 . Components referenced above: https://tree-sitter.github.io/tree-sitter/[tree-sitter^] (parsing), https://huggingface.co/BAAI/bge-small-en-v1.5[BAAI/bge-small-en-v1.5^] embeddings on the https://github.com/sonos/tract[tract^] runtime, and the https://modelcontextprotocol.io[Model Context Protocol^].
-. The xref:../../glossary.adoc[site glossary] defines and sources every term used above. This site is built with https://asciidoctor.org[Asciidoctor^].
+. The link:/glossary/[site glossary] defines and sources every term used above. This site is built with https://asciidoctor.org[Asciidoctor^].

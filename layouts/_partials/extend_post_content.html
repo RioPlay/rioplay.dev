@@ -10,9 +10,17 @@
        reference it), compiled by Aden from this blog's own graph. The term
        anchors (dt[id]) come from the AsciiDoc [[_anchor]] markup. */ -}}
 {{- with $bl.terms }}
+{{- /* relativeURLs rewrites root-relative hrefs in rendered HTML, but it cannot
+       reach URLs that live inside this JSON/script and get injected by JS. So
+       compute the page-relative path back to the site root and prefix the
+       injected links with it, keeping them portable offline (incl. file://). */ -}}
+{{- $segs := split (strings.Trim $.RelPermalink "/") "/" -}}
+{{- $relroot := "" -}}
+{{- range $segs }}{{- $relroot = printf "%s../" $relroot -}}{{- end -}}
 <script type="application/json" id="glossary-usedin-data">{{ . | jsonify }}</script>
 <script>
 (() => {
+  const root = {{ $relroot }};
   const el = document.getElementById('glossary-usedin-data');
   if (!el) return;
   let data;
@@ -28,7 +36,7 @@
       ? dt.nextElementSibling : dt;
     const wrap = document.createElement('span');
     wrap.className = 'glossary-usedin';
-    const links = info.used_in.map(p => `<a href="${p.url}">${p.title}</a>`).join(' · ');
+    const links = info.used_in.map(p => `<a href="${root}${p.url.replace(/^\//, '')}">${p.title}</a>`).join(' · ');
     wrap.innerHTML = `<span class="gu-label">Used in</span>${links}`;
     dd.appendChild(wrap);
   }
@@ -81,7 +89,7 @@
 
   <p class="backlink-foot">
     These links are compiled from <a href="/graph/">this blog's own knowledge graph</a>,
-    built by <a href="/series/aden/">Aden</a> &mdash; the tool this series is about.
+    built by <a href="/series/aden/">Aden</a>, the tool this series is about.
   </p>
 </nav>
 {{- end }}

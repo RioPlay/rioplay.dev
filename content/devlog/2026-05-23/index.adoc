@@ -4,7 +4,7 @@ slug: "2026-05-23"
 date: 2026-05-23
 lastmod: 2026-05-23
 draft: false
-summary: "Retrospective entry — reconstructed 2026-06-10 from git history. This covers the aden foundation sprint (2026-05-23 through 2026-05-25): 49 commits, the initial workspace landing, and the entire arc from AGPL audit through polyglot extraction, Constitutional Contract Kernel, M..."
+summary: "Retrospective entry, reconstructed 2026-06-10 from git history. This covers the aden foundation sprint (2026-05-23 through 2026-05-25): 49 commits, the initial workspace landing, and the entire arc from AGPL audit through polyglot extraction, Constitutional Contract Kernel, MC..."
 categories: ["Devlog"]
 tags: ["aden", "devlog"]
 cover:
@@ -13,7 +13,7 @@ ShowToc: true
 TocOpen: false
 ---
 [.lead]
-*Retrospective entry — reconstructed 2026-06-10 from git history.*
+*Retrospective entry, reconstructed 2026-06-10 from git history.*
 This covers the aden foundation sprint (2026-05-23 through 2026-05-25): 49 commits, the
 initial workspace landing, and the entire arc from AGPL audit through polyglot extraction,
 Constitutional Contract Kernel, MCP server, and CLI polish.  This is where aden went from
@@ -24,7 +24,7 @@ governing a polyglot codebase.
 
 == Security audit as commit zero
 
-The first commit in the range (`58aa462`) was not a feature — it was a security audit.
+The first commit in the range (`58aa462`) was not a feature. It was a security audit.
 Before any user-visible capability landed, the dependencies were trimmed (`blake3` →
 `fnv`; `chrono` and `uuid` removed), path-traversal guards were added in `preprocess.rs`
 and `graph.rs`, and tree-sitter and notify were moved behind feature flags.  AGPL-3.0
@@ -33,7 +33,7 @@ headers were propagated across all 33 `.rs` files, `CONTRIBUTING.md`, `LICENSE`,
 contracts in a single sweep.  The discipline of opening with a compliance pass, before
 making any features visible, set the tone for everything that followed.
 
-== SourceSpan — precise source location
+== SourceSpan: precise source location
 
 `e560c9e` added `SourceSpan` to `aden-core`: a struct carrying `file`, `start_line`,
 `end_line`, `start_byte`, and `end_byte`.  `Document`, `Symbol`, and `Edge` all gained an
@@ -42,7 +42,7 @@ making any features visible, set the tone for everything that followed.
 the AsciiDoc contract format.  This is the substrate that makes `locate` output meaningful
 rather than anchor-only.
 
-== `locate` — go-to-definition for any symbol
+== `locate`: go-to-definition for any symbol
 
 `8d21f4b` wired `SourceSpan` into the parse pipeline end-to-end.  `node_to_span()` in
 `rust.rs` extracts line and byte positions from tree-sitter nodes; `build_code_attributes`
@@ -51,7 +51,7 @@ contract.  The `aden locate <symbol>` CLI command was added with plain and JSON 
 modes.  182 contracts were regenerated.  At this point aden could answer "where is this
 function defined?" with file and line number.
 
-== `ask` — natural-language context assembly
+== `ask`: natural-language context assembly
 
 `3b0d60d` delivered the first version of `aden ask`.  A `QueryIntent` enum (`Debug`,
 `Usage`, `Explain`, `Refactor`, `Impact`, `General`) was introduced with a keyword-based
@@ -83,7 +83,7 @@ cross-platform release workflow for static binaries (`x86_64`/`aarch64` Linux,
 `x86_64`/`aarch64` macOS, `x86_64` Windows) triggered on version tags.
 
 `9654837` banned ASCII art from all documentation and established semantic AsciiDoc as the
-only accepted format throughout — `[source,bash]`, `[TIP]`, `[IMPORTANT]`, `[WARNING]`,
+only accepted format throughout: `[source,bash]`, `[TIP]`, `[IMPORTANT]`, `[WARNING]`,
 `[sidebar]`, `xref:` cross-references in every template.  A `style-guide.adoc` was added
 to `cmd_init` so new projects inherit the same rules.
 
@@ -94,7 +94,7 @@ language-agnostic.
 
 == Research template and lifecycle guides
 
-`f5ba165` added `research.adoc` to `.agent/templates/` — a structured form with evidence
+`f5ba165` added `research.adoc` to `.agent/templates/`: a structured form with evidence
 grading, citation, sanitation, trust levels, confidence scale, red flags, and bias
 detection.  It was wired into `cmd_init` so every new project scaffolds it automatically.
 
@@ -136,8 +136,8 @@ when `Cargo.lock` exists.
 edges).  The generic extractor covers 36+ languages with symbol extraction.
 
 `3a45a2f` added the `aden-mcp` crate: JSON-RPC 2.0 over stdio per the MCP specification,
-exposing `list_symbols`, `impact_analysis`, and `context_for` — the connection point for
-Claude Code, Cursor, Zed, and Windsurf.  Watch mode (`--watch`) was added to the CLI,
+exposing `list_symbols`, `impact_analysis`, and `context_for` (the connection point for
+Claude Code, Cursor, Zed, and Windsurf).  Watch mode (`--watch`) was added to the CLI,
 monitoring all language extensions and emitting contracts to `contracts/` on file change,
 running `aden check` on `.adoc`/`.aden` changes.  GitHub Actions and GitLab CI templates
 were also added.
@@ -155,7 +155,7 @@ and LSP TOCTOU + workspace boundary fixes.  A C resolver was also added in this 
 
 == OWASP Top 10 source scanner
 
-`19b5212` added `aden audit <path>` — an OWASP Top 10 source-code vulnerability scanner.
+`19b5212` added `aden audit <path>`: an OWASP Top 10 source-code vulnerability scanner.
 Detection coverage across Rust, Python, Go, TS/JS, C/C++, Java, PHP: A03 injection (eval,
 exec, SQL concat, command injection), A04 insecure deserialization, A05 security
 misconfiguration, A07 weak crypto + hardcoded secrets + disabled TLS, A08 integrity
@@ -269,13 +269,13 @@ requested anchor is not found.  A `quickstart.adoc` for AI agents was added to `
 
 Three commits refined `locate` in quick succession:
 
-* `1f4ee4b` — case-insensitive matching, fuzzy fallback when exact match fails, compact
+* `1f4ee4b`: case-insensitive matching, fuzzy fallback when exact match fails, compact
   output (`symbol type [full-anchor]`), search hint when nothing is found, debug output
   removed from `ask`.
-* `60a1735` — dual-index fallback: when graph search finds no match, the full-text index
+* `60a1735`: dual-index fallback: when graph search finds no match, the full-text index
   is queried, so `locate` can now find functions, types, and modules that live only in the
   inverted index.
-* `f43b8cf` — added `--limit N` to `locate` for consistency with `search` and `list`.
+* `f43b8cf`: added `--limit N` to `locate` for consistency with `search` and `list`.
 
 == Standardized errors and edge-type UX
 

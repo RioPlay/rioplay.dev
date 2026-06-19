@@ -4,7 +4,7 @@ slug: "the-merge-engine-that-landed"
 date: 2026-06-11
 lastmod: 2026-06-11
 draft: true
-summary: "DRAFT — hold until feat/heal-merge-engine is pushed and validated. Intent overlays promised that human edits survive regeneration; this is the post about the day heal and --fix actually started routing through a real three-way merge engine, with a canonical base snapshot per document, clean merges that preserve [human] blocks byte-for-byte, and [proposed] conflict markers only when a real conflict exists."
+summary: "DRAFT: hold until feat/heal-merge-engine is pushed and validated. Intent overlays promised that human edits survive regeneration; this is the post about the day heal and --fix actually started routing through a real three-way merge engine, with a canonical base snapshot per document, clean merges that preserve [human] blocks byte-for-byte, and [proposed] conflict markers only when a real conflict exists."
 description: "An Aden engineering log: the six-phase integration that replaced line-surgery in heal/--fix with a three-way merge engine backed by a per-document base snapshot in the store."
 series: ["Aden"]
 categories: ["Aden"]
@@ -15,7 +15,7 @@ ShowToc: true
 TocOpen: false
 ---
 // ============================================================================
-// DRAFT STUB — DO NOT PUBLISH until feat/heal-merge-engine is pushed + validated.
+// DRAFT STUB. DO NOT PUBLISH until feat/heal-merge-engine is pushed + validated.
 // Set draft: false and rewrite the prose below once the branch lands on main.
 // All facts below were validated against ~/Projects/aden on 2026-06-12 via the
 // aden CLI. Real (post-rebase) commit SHAs are noted; the devlog cites the older
@@ -23,7 +23,7 @@ TocOpen: false
 // ============================================================================
 
 [.lead]
-TODO lead. The thesis: link:/posts/what-survives-regeneration/[intent overlays] introduced the *idea* of a three-way merge so human annotation survives `aden gen`. This post is the day that idea became the actual code path — `heal` and `--fix` stopped doing line surgery and started reconciling through a real merge engine backed by a stored base snapshot.
+TODO lead. The thesis: link:/posts/what-survives-regeneration/[intent overlays] introduced the *idea* of a three-way merge so human annotation survives `aden gen`. This post is the day that idea became the actual code path. `heal` and `--fix` stopped doing line surgery and started reconciling through a real merge engine backed by a stored base snapshot.
 
 // ---------------------------------------------------------------------------
 // VALIDATED MATERIAL (ready to write from)
@@ -32,12 +32,12 @@ TODO lead. The thesis: link:/posts/what-survives-regeneration/[intent overlays] 
 // but heal still did Table-row surgery. This is the integration that closed it.
 //
 // Phase 1 (f3717e3): parse_contract made the exact inverse of
-//   emit_contract_document — round-trip is the precondition for merging.
+//   emit_contract_document. Round-trip fidelity is the precondition for merging.
 // Phase 2 (0e106cd): per-block [generated] regions + tagged InsertGenerated, so
 //   a merge can reason about individual blocks, not a whole document.
-// Phase 3: unify DriftEvent — already satisfied by prior cleanup (no new commit).
-// Phase 4 (9b45137): aden-store gains a `bases` partition — one canonical
-//   snapshot per document, cascade-deleted with the doc. `aden gen` records it
+// Phase 3: unify DriftEvent. Already satisfied by prior cleanup (no new commit).
+// Phase 4 (9b45137): aden-store gains a `bases` partition (one canonical
+//   snapshot per document, cascade-deleted with the doc). `aden gen` records it
 //   (put_base_snapshot, generate.rs:1635). aden-heal gains
 //   reconcile_contract(fresh, stored, base_text, overlay) (aden-heal/src/reconcile.rs:56),
 //   snapshot preferred over stored-doc reconstruction; routes store-resident
@@ -47,20 +47,20 @@ TODO lead. The thesis: link:/posts/what-survives-regeneration/[intent overlays] 
 //   + put_base_snapshot. Conflict → MergeReconcile proposal with [proposed]
 //   markers persisted to .aden/proposals/. cmd_heal_apply MergeReconcile arm is a
 //   real apply path now. update_store_signature deleted (dead after surgery path
-//   removed — confirmed: zero matches in the tree).
+//   removed, confirmed: zero matches in the tree).
 // Phase 6 (a4cd72c): 5 hermetic integration tests in
-//   crates/aden-cli/tests/merge_engine_integration.rs —
+//   crates/aden-cli/tests/merge_engine_integration.rs:
 //   human_preservation_clean_merge, conflict_generates_proposed_marker,
 //   apply_mergereconcile_proposal, idempotence_no_source_change,
 //   polyglot_python_powershell. (A 6th, apply_mergereconcile_proposal_python, was
-//   added 06-12 as the regression test for the docstring-drop bug — that belongs
+//   added 06-12 as the regression test for the docstring-drop bug. That belongs
 //   to link:/posts/a-green-pipeline-lies/[A Green Pipeline Lies], not here.)
 // Supporting fix: is_safe_id (aden-cli/src/util.rs:1073) now allows '.', so
 //   proposal IDs derived from anchors with file extensions (…lib.rs#alpha) are
 //   accepted by --apply.
 //
 // THE MONEY DEMO (human_preservation_clean_merge): a [human] block with a
-//   non-colliding tag survives a source change as a CLEAN merge — the overlay
+//   non-colliding tag survives a source change as a CLEAN merge: the overlay
 //   file is byte-identical after --fix. Conflict only fires when a [human] block
 //   shares a tag with a generated block; then you get a [proposed] marker, not a
 //   silent clobber and not a refusal to regenerate. That is the whole promise of
@@ -69,7 +69,7 @@ TODO lead. The thesis: link:/posts/what-survives-regeneration/[intent overlays] 
 // HONESTY CONSTRAINTS (carry over from what-survives-regeneration):
 // - Acknowledge prior art: diff3 / three-way merge is not new; the novelty is the
 //   *stored base snapshot per document* + anchor-tagged blocks driving it.
-// - Do NOT claim drift detection is "solved" — this is the heal/--fix apply path.
+// - Do NOT claim drift detection is "solved": this is the heal/--fix apply path.
 // - Conflict detection requires the [human] overlay block tag to equal the
 //   generated block tag EXACTLY (full anchor URI). Worth stating as a real limit.
 
@@ -83,5 +83,5 @@ _The raw account is in the link:/devlog/2026-06-11/[devlog for 2026-06-11], on t
 [.sources]
 == Sources
 
-. Aden source: the https://github.com/RioPlay/aden[Aden repository^] — `crates/aden-store` (the `bases` partition + `put_base_snapshot`), `crates/aden-heal/src/reconcile.rs` (`reconcile_contract`), `crates/aden-cli/src/commands/heal.rs` (`apply_merge_to_store`), and `crates/aden-cli/tests/merge_engine_integration.rs` (the integration suite).
-. The xref:../../glossary.adoc[site glossary] defines every term used above.
+. Aden source: the https://github.com/RioPlay/aden[Aden repository^], specifically `crates/aden-store` (the `bases` partition + `put_base_snapshot`), `crates/aden-heal/src/reconcile.rs` (`reconcile_contract`), `crates/aden-cli/src/commands/heal.rs` (`apply_merge_to_store`), and `crates/aden-cli/tests/merge_engine_integration.rs` (the integration suite).
+. The link:/glossary/[site glossary] defines every term used above.

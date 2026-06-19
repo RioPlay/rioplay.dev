@@ -4,7 +4,7 @@ slug: "2026-06-01"
 date: 2026-06-01
 lastmod: 2026-06-01
 draft: false
-summary: "A light fix day — one targeted commit clearing the last sc-no-secret-ingest false positives and demoting heal drift from a hard gate to a soft advisory in ready."
+summary: "A light fix day. One targeted commit clearing the last sc-no-secret-ingest false positives and demoting heal drift from a hard gate to a soft advisory in ready."
 categories: ["Devlog"]
 tags: ["aden", "devlog"]
 cover:
@@ -15,11 +15,11 @@ TocOpen: false
 NOTE: _Reconstructed retrospectively on 2026-06-10 from git history._
 
 [.lead]
-A light fix day — one targeted commit clearing the last `sc-no-secret-ingest`
+A light fix day. One targeted commit clearing the last `sc-no-secret-ingest`
 false positives and demoting heal drift from a hard gate to a soft advisory in
 `ready`.
 
-== Secret-ingest and heal-gate fixes — commit `4866b08`
+== Secret-ingest and heal-gate fixes: commit `4866b08`
 
 Two small but gate-blocking issues addressed together:
 
@@ -32,8 +32,8 @@ Two small but gate-blocking issues addressed together:
 
 Only `crates/aden-cli/src/commands/misc.rs` touched.  Workspace tests green.
 
-The bigger bodies of work that had been accumulating in the working tree —
-intent overlays, stemming, and the CLI hardening pass — stayed staged for the
+The bigger bodies of work that had been accumulating in the working tree
+(intent overlays, stemming, and the CLI hardening pass) stayed staged for the
 next session.
 
 '''

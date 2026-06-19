@@ -19,7 +19,7 @@ Four commits, amounting to a substantial hardening and feature push: intent
 overlays, ask stemming with guarded top-K, graph connectivity and density
 improvements, and a follow-up cleanup pass that fixed validation findings.
 
-== Intent overlays, ask stemming, and CLI hardening — commit `69ad595`
+== Intent overlays, ask stemming, and CLI hardening: commit `69ad595`
 
 The headline commit of the day landed three intertwined bodies of work that had
 accumulated in the working tree:
@@ -30,7 +30,7 @@ accumulated in the working tree:
 holding `[human]`/`[agent]` intent blocks that survive regeneration.  The
 three-way merge in `gen` (`reconcile_anchor`) ensures regeneration never
 clobbers durable intent.  A collision guard rejects any overlay whose
-`:anchor:` header doesn't match the anchor it was loaded for — closing the
+`:anchor:` header doesn't match the anchor it was loaded for, closing the
 prior anchor-collision data-loss path.
 
 Context-assembling readers (`asm`/`ask`) fold overlay content into the
@@ -40,7 +40,7 @@ topology-only by design.
 `gen --propose` offers a dry-run path; `gen --force-regen` bypasses the merge
 gate.
 
-== ask — conservative stemming and guarded top-K
+== ask: conservative stemming and guarded top-K
 
 Vague queries misrouted because search was purely lexical and `ask` bet its
 whole context budget on a single, possibly-wrong anchor.
@@ -48,11 +48,11 @@ whole context budget on a single, possibly-wrong anchor.
 * Conservative suffix stemmer applied identically at index-build, at query
   time, and in ranking boosts (`overlays`→`overlay`, `delivered`→`deliver`,
   `readers`→`reader`).  A `-ss` guard prevents `process`/`processes` splitting.
-  Added `get` to stop words — it was spuriously matching anchors and
+  Added `get` to stop words; it was spuriously matching anchors and
   misrouting queries.
 * Index cache versioned (v3); a stale cache is rejected and rebuilt so a
   tokenizer change can never be silently shadowed.
-* Deterministic tiebreak on score sorts — equal-BM25 ties no longer inherit
+* Deterministic tiebreak on score sorts: equal-BM25 ties no longer inherit
   arbitrary HashMap iteration order.
 * Guarded top-K seeding: a clear winner seeds single-anchor assembly
   unchanged; a near-tie (within 5.0 noise band) assembles the primary at ~60%
@@ -64,7 +64,7 @@ Defects found during end-to-end validation, fixed in the same commit:
 
 * `aden new --lang rust` scaffold pinned a nonexistent `serde = "2"` → `"1"`.
 * `aden locate` ignored `-j/--json` and emitted a human header on `--format json`.
-* `search --doc-type module` returned zero — it matched a legacy `mod-` prefix
+* `search --doc-type module` returned zero. It matched a legacy `mod-` prefix
   instead of the real `aden://module/` scheme.
 * `aden check .` only scanned the top level; it now walks the full tree
   (skipping `.aden`/`.agent`), which surfaced and fixed 14 dangling refs in
@@ -78,7 +78,7 @@ Defects found during end-to-end validation, fixed in the same commit:
 
 249 tests passed, 0 warnings on landing.
 
-== Graph connectivity, density, ranking, and ignore fixes — commit `7fcb9be`
+== Graph connectivity, density, ranking, and ignore fixes: commit `7fcb9be`
 
 A squash of parallel-worktree work covering several subsystems:
 
@@ -100,7 +100,7 @@ A squash of parallel-worktree work covering several subsystems:
   agent-runtime worktrees from polluting the store; `install.sh` uses
   `install` not `cp` to avoid ETXTBSY when replacing a running `aden-mcp`.
 
-== Diagnose density, lint filter, call-site resolution — commit `ecf53d6`
+== Diagnose density, lint filter, call-site resolution: commit `ecf53d6`
 
 A focused follow-up on the validation findings:
 
@@ -121,7 +121,7 @@ A focused follow-up on the validation findings:
 * *suggest*: routes rename/caller/blast-radius intents to `understand` and
   `query --backlinks`.
 
-== Secret-floor on index read, dead code, lint JSON, doc accuracy — commit `4b5a547`
+== Secret-floor on index read, dead code, lint JSON, doc accuracy: commit `4b5a547`
 
 Final cleanup of the confirmed validation findings:
 

@@ -1,0 +1,15 @@
+{{- /* Project override of PaperMod's search index.
+
+       Default emits absolute .Permalink, so offline search results link back out
+       to the live production site. The search page always lives at /search/
+       (one level deep), so emitting each permalink as "../<relpermalink>" makes
+       results resolve correctly from a server root AND from file:// offline,
+       matching the site-wide relativeURLs setting. fastsearch.js assigns this
+       string straight to link.href, so no JS change is needed. */ -}}
+{{- $.Scratch.Add "index" slice -}}
+{{- range site.RegularPages -}}
+    {{- if and (not .Params.searchHidden) (ne .Layout `archives`) (ne .Layout `search`) }}
+    {{- $.Scratch.Add "index" (dict "title" .Title "content" .Plain "permalink" (printf "..%s" .RelPermalink) "summary" .Summary) -}}
+    {{- end }}
+{{- end -}}
+{{- $.Scratch.Get "index" | jsonify -}}

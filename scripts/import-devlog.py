@@ -35,6 +35,7 @@ OUT_DIR = ROOT / "content" / "devlog"
 PATH_SUBS = [
     ("~/Projects/rioplay.dev", "the blog repo"),
     ("~/Projects/aden-devlog", "the devlog"),
+    ("~/Projects/AI Research", "the research notes"),
     ("~/Projects/research", "the research notes"),
     ("~/Projects/aden", "the aden repo"),
 ]
