@@ -1,0 +1,137 @@
+---
+title: "Two Graphs, One Funnel"
+slug: "two-graphs-one-funnel"
+date: 2026-06-19
+lastmod: 2026-06-19
+draft: false
+weight: 11
+summary: "The language-graph research reached a clean resolution, and it is not the one I was chasing. There is no single graph that beats a neural retriever. There are two graphs that do different jobs: the corpus's own co-occurrence structure for code, an English dictionary for prose. Wired into one funnel that reads the query and picks for itself. The durable win underneath all of it stayed structural."
+description: "An Aden research log resolving the language-graph question into a dual substrate: corpus-derived PPMI for code, Open English WordNet for prose, auto-gated into one retrieval funnel. Why merging every dictionary earns no vote, why the levers now ship on by default behind one opt-out switch, and why the result that survived every correction was structural, not lexical."
+series: ["Aden"]
+categories: ["Aden"]
+tags: ["aden", "ai-tooling", "developer-tools", "knowledge-graph", "retrieval", "embeddings", "research", "rust"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+The last post ended on a bet I could not yet close: that the relationships inside language can be computed once into a graph instead of re-inferred by a model on every query. I kept looking for the single graph that would beat a neural retriever at its own game. That graph does not exist. What exists is better and less tidy: two graphs that do different jobs, and one funnel that reads your query and decides which one to use. This is the log of arriving there, including the part where I tried to merge every dictionary in the public domain and the eval told me no.
+
+[IMPORTANT]
+.This is in-progress research
+====
+This is an active line of work. The numbers are real measurements on real probe sets, and the probe sets are still small, so read the exact figures as directional. The levers described below are now on by default in Aden, after an end-to-end check held up, with a single environment variable to turn them off. I am publishing the resolution because it corrects the open question I left in link:/posts/dont-take-the-dictionarys-word-for-it/[the previous post], and the honest path matters as much as the destination.
+====
+
+[NOTE]
+.The short version
+====
+A computed language graph does not beat <<_dense_retrieval,dense retrieval>> head to head, and I have stopped trying to make it. The graph splits in two instead. For code, the lever that helps is the corpus's own co-occurrence structure, because code synonymy is local: `vector` means `embeddingprovider` here, not `virus`. For prose, the lever that helps is an actual English dictionary, because prose synonymy is the language's, not the corpus's. A generic dictionary makes code retrieval worse, and the corpus graph does nothing for prose. So I wired one auto-gate that reads the query shape and picks the right lever per query. And the result that outlived every correction in this whole arc was never retrieval at all. It was structure.
+====
+
+== Two graphs, not one
+
+For weeks I treated this as one question: can a graph beat the neural baseline at retrieval? Framed that way, the answer kept coming back no, and link:/posts/dont-take-the-dictionarys-word-for-it/[I reported the no honestly]. The reframe that unstuck it was realizing I had been building two different graphs and scoring them as if they were one.
+
+The first is a *structural* graph: the code itself, as <<_typed_edge,typed edges>>. Function calls function, module contains symbol, test covers code. This is the graph link:/posts/six-live-edges/[Aden was built on], and it answers questions about how a system is wired.
+
+The second is a *lexical* graph: language, as relationships between words. It comes in two flavors that turned out to matter enormously. One flavor is derived from the corpus, by measuring which terms actually co-occur in this codebase. The other is imported from a dictionary, which knows English in general but knows nothing about your code. I had been folding both into a single "language graph" lever and watching it lose. Pulling them apart is the whole story.
+
+[.mermaid]
+----
+flowchart TB
+  classDef code fill:#ede9fe,stroke:#7c3aed,color:#4c1d95;
+  classDef prose fill:#ede9fe,stroke:#7c3aed,color:#4c1d95;
+  classDef wrong fill:#fee2e2,stroke:#ef4444,color:#7f1d1d;
+  q["a query"] --> shape{"what kind<br/>of text?"}
+  shape -->|"code: snake_case,<br/>operators, paths"| ppmi["corpus co-occurrence<br/>(PPMI rerank)"]:::code
+  shape -->|"prose: plain words"| oewn["English dictionary<br/>(OEWN expansion)"]:::prose
+  ppmi -.->|"dictionary here<br/>only dilutes"| x1["worse"]:::wrong
+  oewn -.->|"corpus graph here<br/>does nothing"| x2["no effect"]:::wrong
+----
+
+[.text-center]
+_Two substrates, two domains. The lever that helps code hurts when you reach for the dictionary, and the lever that helps prose is invisible to the corpus graph. The mistake was assuming one of them was "the" language graph._
+
+== What code wants: its own vocabulary
+
+Code has synonyms, but they are not English synonyms. In this codebase `fuse` means `rrf`, `fusion`, `reciprocal`, `bm25`. A dictionary thinks `fuse` means `weld` and `melt`. So the relationships worth using for code retrieval are the ones the corpus derives from how its own terms travel together, with no model in the loop at query time.
+
+The mechanism is a <<_ppmi,PPMI>> rerank: take the shortlist <<_dense_retrieval,dense retrieval>> already produced, and reorder it by how strongly each candidate's terms co-occur with the query's terms across the corpus. On a code probe set whose queries deliberately use a synonym of the target, so only expansion or reranking can route them, this lifts retrieval quality from MRR 0.216 to 0.289.
+
+Then the test that mattered: what happens if I add a dictionary on top of that. The answer is that it gets worse. PPMI alone scores 0.289; PPMI plus Open English WordNet synonyms drops to 0.247. The dictionary drags in English senses the code does not mean, and they cost more than they pay. On code, the free win is to drop the dictionary bonus entirely.
+
+== What prose wants: the dictionary
+
+Here is the objection I should have led with months ago: dictionaries are for prose, not code. Every test above ran code-symbol probes. That is a strawman against the dictionary, not a test of it.
+
+So I gave it the test it deserved. A neutral external corpus of 60 Wikipedia intros, keyword search only (the regime where a dictionary should matter, since dense already bridges paraphrase on its own), and 42 synonym-bridge probes built so the query word never appears in the target article. Only a dictionary expansion can connect them.
+
+The result is the mirror image of the code finding.
+
+[cols="3,1", options="header"]
+|===
+| Prose retrieval (R@1 over 42 synonym-bridge probes) | Bridged
+
+| Keyword baseline (the query word is not in the article) | 1 / 42
+| Keyword + Open English WordNet expansion | 41 / 42
+| Dense retrieval alone | 20 / 42
+|===
+
+The dictionary bridges `seism` to earthquake, `attorney` to lawyer, `felicity` to happiness, `dearth` to famine, `ire` to anger. Note the third row: dense retrieval on its own catches only about half of these, so the dictionary is not redundant with the neural model on prose. It is complementary. This is the result that turns "the dictionary is useless" into "the dictionary was being asked to do the corpus's job."
+
+=== The merge that earned no vote
+
+If a dictionary helps prose, the greedy instinct is to merge every dictionary I can legally ship and get the union of all their synonyms. I built that. I license-cleared six permissive sources and started with the broadest: Moby (mthesaur.txt, public domain), which converts to 1,857,122 synonym edges from 30,260 root entries. For contrast, the word `merge` has 15 outgoing edges in Open English WordNet and 165 in Moby. Breadth was supposed to be the point.
+
+Breadth was the problem. Moby alone bridges only 16 of the 42 prose probes, because most of its 165 senses for a word are noise for any given query. More telling: merging Moby into OEWN adds nothing over OEWN by itself. The careful, smaller dictionary already had the bridges that matter, and the million extra edges only added ways to be wrong. So the verdict is plain: do not ship the dictionary merge. One good dictionary, grounded to the corpus, is the lever. A pile of them is not.
+
+(Shipping a merged store did force one piece of real infrastructure: because the sources carry different licences, every edge has to record where it came from, so an AGPL-incompatible source can be excluded by <<_provenance,provenance>> rather than by hand. That firewall is worth keeping even though the merge is not.)
+
+== One funnel that picks for itself
+
+Two levers that each help in exactly one domain and hurt in the other is not a decision I want to push onto whoever runs a query. So the levers auto-gate. `ADEN_LEXICON_AUTO` reads two signals: the shape of the query (does it look code-y, with identifiers, operators, and paths, or is it plain words) and the shape of the corpus (`Index::code_anchor_fraction`, what fraction of the index is code). It expands with the dictionary for non-code queries and reranks with PPMI when the query looks code-y or the corpus is code-bearing.
+
+Grounding does the rest of the work without a classifier. A dictionary synonym is kept only if it tokenizes entirely into vocabulary the corpus actually uses. So on a code-only corpus the prose lever quietly becomes a no-op, because the English synonyms it would add are words the code never says. Nothing has to decide "this is a code repo, disable the dictionary." The dictionary disables itself.
+
+[.mermaid]
+----
+flowchart LR
+  classDef own fill:#ede9fe,stroke:#7c3aed,color:#4c1d95;
+  classDef win fill:#ede9fe,stroke:#7c3aed,color:#4c1d95;
+  q["query:<br/>combine ranked lists"] --> auto["ADEN_LEXICON_AUTO"]:::own
+  auto -->|"plain words:<br/>expand"| exp["combine, fuse, blend"]
+  auto -->|"code corpus:<br/>rerank"| rr["PPMI over candidates"]
+  exp --> out["rrf_fuse at rank 1"]:::win
+  rr --> out
+----
+
+[.text-center]
+_The case that proves the gate: a plain-English question whose answer is a function. "combine ranked lists" expands to `fuse` and `blend`, reranks against a code corpus, and promotes `rrf_fuse` to rank 1 where the default ranking missed it. Best of both, decided by the text._
+
+I said this needed a wider eval before going on for everyone, so I ran one: an end-to-end OFF versus ON comparison on the shipped binary, not just the component harness. Prose synonym-bridge routing went from 0 of 15 to 15 of 15, the code case improved (`rrf_fuse` climbed from rank 18 to rank 1), and nothing regressed, because the rerank only reorders the hybrid base and the prose expansion is grounded to the corpus. That was enough to turn auto-gating on by default. One switch, `ADEN_LEXICON_OFF`, turns it all the way back off. The grounding and corpus-gating are what make default-on safe: each lever no-ops on a corpus it cannot help, so it costs nothing where it would not pay.
+
+== The win that was structural all along
+
+Step back from the levers and the result that survived every correction in this arc comes into focus, and it is not a retrieval number. Every attempt to beat <<_dense_retrieval,dense retrieval>> on accuracy either lost or tied. The lexical funnel above is real and honest, but it is a modest lever earned by a lot of negative results.
+
+The thing that never wobbled is the <<_blast_radius,blast radius>>: the question of what breaks if I change this symbol. Measured against a parser-independent scan of the source, Aden's incoming-call edges answer that question at precision 0.99 and recall 0.98. A <<_dense_retrieval,dense>> embedder cannot answer it at any score, because "what depends on this" is a structural fact, not a semantic similarity. That is the capability the graph has that a vector fundamentally does not, and it is exactly where link:/posts/six-live-edges/[the graph was always strongest].
+
+So the honest shape of Aden after this research is two graphs with two different jobs. The lexical graph is a cheap, owned, domain-routed retrieval aid that is genuinely useful on prose and politely declines on code. The structural graph is the edge: <<_impact_analysis,impact analysis>>, traversal, typed relations, the answers a retriever cannot give. The language-graph bet is still live, and the first dividend it actually paid was teaching me which graph was load-bearing.
+
+== What is still open
+
+I will not pretend this is finished. Two questions sit right on top of the prose result. Does a strong enough dense model eventually subsume the dictionary on prose, making the OEWN win a feature only of the no-model regime? And does the corpus-derived concept graph, which clearly helps code, do anything for prose? That mechanism is untested. Underneath both is the structural work I flagged last time: the lexical graph is still undirected and split by spelling rather than by sense, and `work` the noun cannot share a node with `work` the verb without poisoning every edge that touches it. Sense-splitting is the prerequisite, and it is the next real lever.
+
+That is the work, still being compiled in the open, including the parts that will walk back something I said here.
+
+[.text-center]
+_This post is drawn from three raw development days: the link:/devlog/2026-06-17/[devlog for 2026-06-17], the link:/devlog/2026-06-18/[devlog for 2026-06-18], and the link:/devlog/2026-06-19/[devlog for 2026-06-19], all on the link:/devlog/[Aden timeline]. The connections below are compiled from this blog's own knowledge graph._
+
+[.sources]
+== Sources
+
+. Aden source: the https://github.com/RioPlay/aden[Aden repository^]. The dual-substrate findings come from A/B harnesses under `crates/aden-cli/tests/`: `compound_ab.rs` (the code PPMI rerank), `prose_lexicon_ab.rs` and `lexicon_routing_ab.rs` (the prose synonym-bridge benchmark and the auto-gate), `build_moby_store.rs` (the merged store), and `lexicon_firewall.rs` (the per-edge provenance gate). The auto-gate lives in `crates/aden-cli/src/util.rs` and `Index::code_anchor_fraction` in `crates/aden-index/src/lib.rs`. The dictionary extraction is `scripts/moby_to_triples.py`. The levers are documented in `docs/retrieval-levers.adoc`.
+. Open English WordNet, the openly licensed (CC BY 4.0) descendant of Princeton's https://wordnet.princeton.edu/[WordNet^]: https://en-word.net/[en-word.net^]. Moby Thesaurus is public domain via https://www.gutenberg.org/ebooks/3202[Project Gutenberg #3202^].
+. The link:/glossary/[site glossary] defines and sources every term used above. This site is built with https://asciidoctor.org[Asciidoctor^].

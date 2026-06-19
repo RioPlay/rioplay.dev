@@ -18,7 +18,7 @@ A plain-text writing format with a regular grammar, cross-references (`+<<anchor
 A <<_referential_context_compiler,referential context compiler>>: it compiles code and documentation into a <<_knowledge_graph,knowledge graph>> that humans and AI agents can query for exactly the context a task needs. See link:/series/aden/[the Aden series].
 
 [[_anchor]]Anchor::
-A stable identifier for a node in <<_aden,Aden>>'s <<_knowledge_graph,knowledge graph>>, written as a URI such as `aden://module/<crate>/<file>#<symbol>`. Every symbol, documentation heading, and edge endpoint is named by its anchor, so context and cross-references stay valid across files and runs. (When two files share a basename the naive anchor can collide — a subtlety explored in link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].)
+A stable identifier for a node in <<_aden,Aden>>'s <<_knowledge_graph,knowledge graph>>, written as a URI such as `aden://module/<crate>/<file>#<symbol>`. Every symbol, documentation heading, and edge endpoint is named by its anchor, so context and cross-references stay valid across files and runs. (When two files share a basename the naive anchor can collide, a subtlety explored in link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].)
 
 [[_blast_radius]]Blast radius::
 The transitive set of callers and referencers of a changed symbol: everything that depends on it, and could therefore break. <<_aden,Aden>> answers this by walking *incoming* <<_typed_edge,typed edges>> from the changed symbols outward. The direction matters: "what calls this" is an incoming traversal; "what this calls" is outgoing and is not blast radius. Also called <<_impact_analysis,impact analysis>>. See link:/posts/six-live-edges/[Six Live Edges].
@@ -35,10 +35,10 @@ Finding groups of nodes that are more connected to each other than to the rest o
 [.ref]#References: https://arxiv.org/abs/0803.0476[Louvain, Blondel et al. 2008 (arXiv)^] and https://arxiv.org/abs/1810.08473[Leiden, Traag et al. 2019 (arXiv)^]#
 
 [[_contains]]Contains (edge)::
-A <<_typed_edge,typed edge>> for structural containment — a module _contains_ its symbols, a project _contains_ its modules. It is deliberately distinct from <<_aden,Aden>>'s `Documents` edge, which means *prose documents code*. Collapsing the two into one had buried the genuine documentation links under containment mirrors; splitting them out is a refactor told in link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
+A <<_typed_edge,typed edge>> for structural containment: a module _contains_ its symbols, a project _contains_ its modules. It is deliberately distinct from <<_aden,Aden>>'s `Documents` edge, which means *prose documents code*. Collapsing the two into one had buried the genuine documentation links under containment mirrors; splitting them out is a refactor told in link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
 
 [[_context_assembly]]Context assembly::
-Selecting and ordering the connected slice of a <<_knowledge_graph,knowledge graph>> a task needs, within a <<_token_budget,token budget>> — surgical selection instead of dumping whole files into a prompt. <<_aden,Aden>>'s `asm` command walks <<_typed_edge,typed edges>> outward from a starting symbol, keeping the most load-bearing relationships until the budget is spent. Because that walk is outgoing-only, the *direction* of an edge is load-bearing — see link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
+Selecting and ordering the connected slice of a <<_knowledge_graph,knowledge graph>> a task needs, within a <<_token_budget,token budget>>: surgical selection instead of dumping whole files into a prompt. <<_aden,Aden>>'s `asm` command walks <<_typed_edge,typed edges>> outward from a starting symbol, keeping the most load-bearing relationships until the budget is spent. Because that walk is outgoing-only, the *direction* of an edge is load-bearing. See link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
 
 [[_context_density]]Context density::
 The share of an assembled <<_token_budget,token budget>> that is actually filled with substantive
@@ -56,7 +56,7 @@ Search by meaning rather than shared words, using <<_embedding,embeddings>>. It 
 The property that identical input always produces a byte-identical index and the same retrieval results, run to run. Without it a benchmark cannot be trusted and two people get different answers for the same code. <<_aden,Aden>> makes indexing deterministic by canonicalising order everywhere it would otherwise depend on hash iteration, thread timing, or a wall-clock value. The hunt for five separate sources of non-determinism is told in link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
 
 [[_dogfooding]]Dogfooding::
-Using your own tool on itself. Running <<_aden,Aden>> against Aden's own codebase turned the graph viewer into a diagnostic that surfaced real bugs in Aden — redundant edges and a pollution hub — that code review had missed. The strongest argument that a tool works is that it improves itself. See link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
+Using your own tool on itself. Running <<_aden,Aden>> against Aden's own codebase turned the graph viewer into a diagnostic that surfaced real bugs in Aden (redundant edges and a pollution hub) that code review had missed. The strongest argument that a tool works is that it improves itself. See link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
 
 [[_edge_activation]]Edge activation policy::
 The rule from ADR-007 governing when an edge type may appear in <<_aden,Aden>>'s production surfaces: an edge type is real only when it has an emitter (something in `gen` produces it deterministically), a consumer (a traversal or filter acts on it), and an eval (a test proves it changes an answer for the better). A filter list must not name an edge type that has no emitter. The census on Aden's own codebase moved from six live types to nine after wave 1 activated `Tests`, `Implements`, and `Mutates`. See link:/posts/six-live-edges/[Six Live Edges].
@@ -69,10 +69,10 @@ A vector of numbers that represents the meaning of a piece of text, positioned s
 [.ref]#Reference: https://arxiv.org/abs/1301.3781[word2vec, Mikolov et al. 2013 (arXiv)^]#
 
 [[_graph_viewer]]Graph viewer (viz / view)::
-How <<_aden,Aden>> renders the <<_knowledge_graph,knowledge graph>> for humans. `aden viz` exports a slice as a text diagram — Mermaid, Graphviz DOT, or JSON — to drop into a pull request or doc. `aden view` opens a self-contained, *fully offline* interactive graph in the browser: <<_community_detection,community>> drill-down, git-history replay, search, edge-type filters, and click-through to the source line. Pointing it at Aden's own graph is what turned visualisation into diagnosis. See link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
+How <<_aden,Aden>> renders the <<_knowledge_graph,knowledge graph>> for humans. `aden viz` exports a slice as a text diagram (Mermaid, Graphviz DOT, or JSON) to drop into a pull request or doc. `aden view` opens a self-contained, *fully offline* interactive graph in the browser: <<_community_detection,community>> drill-down, git-history replay, search, edge-type filters, and click-through to the source line. Pointing it at Aden's own graph is what turned visualisation into diagnosis. See link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
 
 [[_hybrid_retrieval]]Hybrid retrieval::
-Combining keyword search (<<_bm25,BM25>>) and meaning-based search (<<_dense_retrieval,dense retrieval>>) into one ranking with <<_rrf,Reciprocal Rank Fusion>>. You get exact matches and conceptual matches in a single result list. It meets or beats BM25 on every corpus tested — Go, Rust, C#, Python, and TypeScript — measured in link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
+Combining keyword search (<<_bm25,BM25>>) and meaning-based search (<<_dense_retrieval,dense retrieval>>) into one ranking with <<_rrf,Reciprocal Rank Fusion>>. You get exact matches and conceptual matches in a single result list. It meets or beats BM25 on every corpus tested (Go, Rust, C#, Python, and TypeScript), as measured in link:/posts/the-graph-that-audited-itself/[The Graph That Audited Itself].
 
 [[_impact_analysis]]Impact analysis::
 Determining what a proposed change will affect before you make it, the forward view of <<_blast_radius,blast radius>>. <<_aden,Aden>>'s `impact-diff` runs it against a Git diff, reporting the blast radius, risk tier, and an affected-tests section that shows which test files have `Tests` edges into the changed symbols or their dependents. See link:/posts/six-live-edges/[Six Live Edges].
@@ -87,9 +87,16 @@ An open protocol that lets AI clients call external tools through a uniform inte
 [[_pillar_page]]Pillar page::
 A hub page for one broad topic that links down to the specific <<_cluster,cluster>> posts and that they link back up to. link:/series/aden/[The Aden series] index is a pillar page.
 
+[[_ppmi]]PPMI (Pointwise Mutual Information)::
+A statistic that measures how much more two terms co-occur than chance alone would predict. <<_aden,Aden>> uses it to rerank a <<_dense_retrieval,dense retrieval>> shortlist for code, because it learns which identifiers actually travel together in this corpus: `fuse` sits near `rrf` and `bm25` here, not near `weld`. That makes it sense-correct by construction, unlike a generic dictionary. PPMI-only reranking lifts code retrieval from MRR 0.216 to 0.289, and adding a dictionary on top dilutes it. See link:/posts/two-graphs-one-funnel/[Two Graphs, One Funnel]. +
+[.ref]#Reference: https://aclanthology.org/J90-1003/[Church & Hanks, "Word Association Norms, Mutual Information, and Lexicography" (1990)^]#
+
+[[_provenance]]Provenance (per-edge source)::
+A record, carried on every edge, of which source it came from. Because <<_aden,Aden>> can merge a lexical store from several dictionaries under different licences, provenance is the legal firewall: an edge from an AGPL-incompatible source can be filtered out by where it came from rather than by hand. The merge itself earned no retrieval gain, but the firewall is worth keeping. See link:/posts/two-graphs-one-funnel/[Two Graphs, One Funnel].
+
 [[_relates_to]]RelatesTo (edge)::
-A <<_typed_edge,typed edge>> for cross-document prose references — an `+<<anchor>>+` citation,
-an `xref:` link, or a Markdown `[text](#heading)` link from one document to another. Emitted
+A <<_typed_edge,typed edge>> for cross-document prose references: an `+<<anchor>>+` citation,
+an `xref:` link, or a Markdown `+[text](#heading)+` link from one document to another. Emitted
 bidirectionally: both the citing and the cited node are reachable from each other. It is the
 prose-stratum counterpart to `Calls` in the code stratum. `query --backlinks` on a glossary
 term returns every document that has a `RelatesTo` edge into it. See
@@ -112,6 +119,10 @@ A fast, incremental parser generator with grammars for hundreds of languages. <<
 
 [[_typed_edge]]Typed edge::
 A relationship in the <<_knowledge_graph,knowledge graph>> that carries a label (calls, imports, constrains, documents) rather than being a bare connection. The type is what makes a query like "what _calls_ this?" answerable.
+
+[[_wordnet]]WordNet / Open English WordNet::
+A large lexical database of English that groups words into sets of synonyms and links them by sense (is-a, part-of). Open English WordNet (OEWN) is its openly licensed (CC BY 4.0) descendant. <<_aden,Aden>> maps OEWN's pointers onto <<_typed_edge,typed edges>> and uses it as the prose half of its lexical substrate. It is decisive for prose retrieval (bridging 41 of 42 synonym probes where a keyword baseline bridges 1) but dilutes code retrieval, where corpus-derived relationships win. See link:/posts/two-graphs-one-funnel/[Two Graphs, One Funnel]. +
+[.ref]#References: Princeton https://wordnet.princeton.edu/[WordNet^] and https://en-word.net/[Open English WordNet^]#
 
 '''
 

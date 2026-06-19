@@ -1,0 +1,62 @@
+---
+title: "Devlog: 2026-06-19"
+slug: "2026-06-19"
+date: 2026-06-19
+lastmod: 2026-06-19
+draft: false
+summary: "I set out to merge every permissive dictionary (OEWN, Moby, Roget, Webster, Wikidata, Princeton WordNet) into one provenance-tagged overlay and prove it lifts retrieval. The eval said no, twice."
+categories: ["Devlog"]
+tags: ["aden", "devlog"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+I set out to merge every permissive dictionary (OEWN, Moby, Roget, Webster, Wikidata, Princeton WordNet) into one provenance-tagged overlay and prove it lifts retrieval. The eval said no, twice. Moby's 1.85M synonym edges earn no vote over the corpus-derived graph, and adding any dictionary to the PPMI reranker dilutes it. The lever is still what the corpus itself derives.
+
+== The plan, and the gate
+
+I license-cleared six shippable sources (Moby public domain, OEWN CC-BY-4.0 plus the WordNet notice, Roget/Webster/Wikidata, Princeton WordNet), and excluded ConceptNet as ShareAlike incompatible with AGPL. Because the decision was to ship a prebuilt store, per-edge provenance became a hard requirement (the legal firewall). The plan then gated everything behind a two-source ablation: prove a merge beats OEWN-alone before building the shipping pipeline or wiring it into the read path.
+
+== Building Moby
+
+mthesaur.txt (Project Gutenberg #3202, public domain), 30,260 root entries. The converter emits root to synonym SynonymOf triples (lowercased, single word, digits and phrases dropped): 1,857,122 edges into a dedicated fjall store under aden://term/moby/. For contrast, "merge" has 15 outgoing edges in OEWN (unite, unify, blend, mix) and 165 in Moby (accouple, accumulate, add, adhere, and on). Breadth is the whole story.
+
+== The ablation
+
+Two harnesses, same cards and probes, code and prose probe sets whose queries use a synonym of the target so only expansion or rerank can route them.
+
+BM25 routing (R@1): baseline 0, OEWN-grounded +1, Moby +0, merged-union +1 (and minus 1 on prose, where Moby noise displaces the right answer), cross-source-agreement +0 on code and +1 on prose. The merge never beats OEWN-alone.
+
+Dense rerank (MRR, the richer gate): on code, RR+PPMI (corpus co-occurrence, no dictionary) is the best non-oracle at 0.289. Add OEWN, Moby, their union, or their agreement and it drops to roughly 0.247. The dictionary is net-negative on the corpus signal. On prose, plain dense wins (0.373); the bge embeddings already bridge the synonym, so the dictionary is redundant.
+
+== Verdict
+
+The 0.289 is the same number the concept-graph reranker hit on the 18th. The dictionary merge, even with Moby's million-edge breadth and a cross-source-agreement filter, does not move it. So: do not ship the dictionary merge. The lever is the corpus-derived graph (PPMI today, concept-centroid mutual-kNN next), and there is a free win sitting in the existing reranker, namely drop the OEWN synonym bonus, because PPMI-only beats PPMI+OEWN on code.
+
+== The correction: I tested the dictionary on the wrong domain
+
+Then the obvious objection, which I should have led with: dictionaries are for prose, not code. The whole ablation above ran code-symbol probes (put_edges_bulk, rrf_fuse) and a "prose" arm that was really doc-headings drowning in a 3500-symbol code corpus where dense already bridges paraphrase. That is a strawman against the dictionary, not a test of it.
+
+So I gave it the test it deserved. A neutral external prose corpus (60 Wikipedia intros), BM25-only (the regime where a dictionary should matter, since dense already covers paraphrase), and 42 auto-constructed synonym-bridge probes: for each concept C, query with an OEWN synonym S that does not appear in C's article, gold is C. Baseline BM25 cannot match (S is not in the article); only a dictionary expansion of S (which by symmetric synonymy contains C) can bridge it.
+
+The result is the mirror image of the code finding. Baseline 1/42. +OEWN 41/42. The dictionary bridges seism to earthquake, attorney to lawyer, felicity to happiness, dearth to famine, ire to anger, infirmary to hospital. Moby is much weaker (16/42, broad and noisy), and the merge adds nothing over OEWN alone, but OEWN by itself is decisive. So the dual substrate is now real with numbers on both sides: corpus PPMI for code (0.289), OEWN for prose (+40 of 42). The dictionary was never useless. It was being asked to do the corpus's job.
+
+Open: does dense subsume OEWN on prose (is the win only in the no-model regime)? And the concept-graph-over-prose mechanism is still untested. But the headline holds: route by domain.
+
+== Shipping both halves: auto-gated levers
+
+With both substrates measured, I wired them into the one retrieval funnel as two opt-in levers: a corpus PPMI rerank for code, grounded OEWN synonym expansion for prose. Then the obvious next question, which is the whole point: can it pick for itself? It can. ADEN_LEXICON_AUTO detects the query shape (identifiers and operators versus plain words) and the corpus substrate (what fraction of the index is code), then expands for non-code queries and reranks when the query looks code-y or the corpus is code-bearing. Grounding does the rest: a dictionary synonym that the corpus never uses is dropped before it can mislead, so the prose lever is a no-op on a code-only corpus without any classifier deciding so.
+
+The case that proves it is the natural-language question over code: "combine ranked lists" is plain prose, but the answer is a function. Auto mode expands (combine to fuse, blend) and reranks (code corpus), and rrf_fuse climbs to rank 1, where the default ranking missed it. Best of both, decided by the text.
+
+Then the wider eval I said this needed: an end-to-end OFF vs ON bench on the shipped binary, not just the harness. Prose synonym-bridge routing went 0/15 to 15/15, code improved (rrf_fuse rank 18 to 1), and nothing regressed, because the rerank only reorders the hybrid base and the expansion is grounded. So auto-gating is on by default now, with ADEN_LEXICON_OFF to turn it back off. The explicit ADEN_LEXICON_EXPAND and ADEN_PPMI_RERANK still force one lever on its own. Documented in docs/retrieval-levers.adoc.
+
+== Housekeeping
+
+The lexical scaffolding lived only on perf/store-batch-ingest. I validated that branch (one bench compile fix for a new AssemblyOptions field), fast-forwarded it to main so the foundation is shared, then built the lexical work on a clean main base. Three asm-ordering branches (mmr-pruning, ppr-ordering, budget-sweep-eval) remain a separate, overlapping integration backlog for another day.
+
+'''
+[.devlog-foot]
+This is a lightly cleaned entry from the raw link:/devlog/[Aden devlog]. The polished stories that draw on these days live in the link:/series/aden/[Aden series].

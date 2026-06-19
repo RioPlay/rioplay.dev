@@ -1,0 +1,232 @@
+---
+title: "Don't Take the Dictionary's Word for It"
+slug: "dont-take-the-dictionarys-word-for-it"
+date: 2026-06-18
+lastmod: 2026-06-18
+draft: false
+weight: 10
+summary: "Two days of work on a bet: that the relationships inside language are stable enough to compute once into a graph, so a query becomes a lookup instead of a fresh inference every time. This is the honest log of testing that bet against real retrieval. Most of it was negative results, one self-inflicted measurement leak that I had to find and undo, and a single real win that landed on the side of the pipeline I did not expect. The research is still in progress and the numbers will keep moving."
+description: "An Aden research log: the bet that language's relationships can be computed once into an owned graph rather than re-derived by a model on every query, tested against real retrieval. Why query expansion failed six ways, how a test-data leak inflated the headline result, and why the graph's real win is enriching what gets embedded rather than reranking what comes back. Work in progress, reported honestly."
+series: ["Aden"]
+categories: ["Aden"]
+tags: ["aden", "ai-tooling", "developer-tools", "knowledge-graph", "retrieval", "embeddings", "research", "rust"]
+cover:
+  hidden: true
+ShowToc: true
+TocOpen: false
+---
+[.lead]
+Here is the bet, in one line: today's AI spends most of its money and compute re-deriving things it already worked out a moment ago. Every call re-embeds the same text, re-retrieves the same context, and re-infers the same relationships between the same words, stochastically, on a GPU, billed per token. The relationships inside language are mostly stable. `cluster` is about grouping whether or not you pay a model to rediscover it. So compute them once, into a graph that is deterministic, owned, and cheap, and a query becomes a traversal instead of an inference. That is the thesis behind link:/posts/introducing-aden/[Aden], and I want it on the record in my own words. What follows is two days of testing whether it actually holds.
+
+[IMPORTANT]
+.This is in-progress research
+====
+Everything below is an active line of work, not a finished result. The numbers are real measurements taken on real data, but they are still moving, the probe sets are still small, and several of the conclusions reversed themselves inside the same two days once I measured more carefully. I am publishing it as a running log because the honest path matters as much as the destination. I will post updates here as the work is compiled and completed. *The day after this was written, the main result below was corrected: see the update at the end.*
+====
+
+[NOTE]
+.The short version
+====
+I tried to make a computed language graph beat a strong neural baseline at retrieval. Most of it failed, and the failures were the point. Expanding a query with a word's relationships made results worse, six different ways. Then I found that my own evaluation was reading its answer key out of the test files, which had inflated the best result and inverted another. After fixing the leak and tripling the probe set, the sober truth was that no graph-based reranker beat plain <<_dense_retrieval,dense retrieval>>. The graph paid off on the other side of the pipeline instead: when I used it to enrich what gets embedded rather than to reorder what comes back, it beat dense for the first time. That is the direction worth pursuing, and it is still early.
+====
+
+== The bet: compute language once
+
+Aden is a <<_referential_context_compiler,referential context compiler>>. It turns a codebase or a documentation set into a <<_knowledge_graph,knowledge graph>> so a person or an agent can assemble exactly the context a task needs. The bet I am testing extends that idea past code and into language itself. The relationships between words, what they mean, how they connect, what overlaps with what, do not need a billion-parameter model re-run on every query to be rediscovered. They can be computed once into a graph: deterministic, auditable, owned, resident on a CPU, permanent. After that, the model gets called only for the one thing it is irreducibly good at, which is generating and reasoning over something genuinely new.
+
+I am not trying to replace the model. I am trying to invert the cost structure around it. Move the durable value into a graph that is cheap and owned, and demote the model to a thin, occasional, swappable commodity you touch as little as possible. Make AI cheaper by doing far less of it.
+
+[.mermaid]
+----
+flowchart TB
+  classDef cost fill:#fee2e2,stroke:#ef4444,color:#7f1d1d;
+  classDef own fill:#ede9fe,stroke:#7c3aed,color:#4c1d95;
+  subgraph TODAY["Today: pay the model on every query"]
+    direction LR
+    q1["query"] --> rd["re-embed,<br/>re-retrieve,<br/>re-infer relations"]:::cost --> a1["answer"]
+  end
+  subgraph ADEN["Aden: compute once, then look up"]
+    direction LR
+    once["compute the<br/>relationships once"] --> g[("owned graph:<br/>cheap, on CPU")]:::own
+    q2["query"] --> trav["traverse"] --> a2["answer"]
+    g --> trav
+  end
+----
+
+[.text-center]
+_The bet: stop paying a GPU to re-derive language on every query. Compute the stable relationships once into an owned graph, and a query becomes a lookup._
+
+There is an honest boundary on this claim, and I would rather draw it myself than have someone draw it for me. Aden is a retriever and a knowledge substrate, not a reasoner. It will never write a clustering algorithm or reason about a case it has never seen. That stays the model's job. What the graph can do is make that the only thing you pay neural compute for.
+
+== Don't take the dictionary's word for it
+
+The obvious starting point for a language graph is a dictionary. I pulled Open English WordNet, an openly licensed descendant of Princeton's WordNet, and mapped its explicit pointers onto Aden's <<_typed_edge,typed edges>>: a shared synset became a `SynonymOf` edge, a hypernym became an `IsA` edge, a part-of relation became a `PartOf` edge. The whole of English came out to about 172,000 edges across roughly 69,000 words, generated in a couple of seconds and measured in megabytes. The whole language fits in a rounding error of compute. That part of the bet is plainly true.
+
+The trouble is that a generic dictionary does not know which sense of a word you mean. In a codebase, `vector` means an array of numbers you embed. The dictionary's first instinct is `virus`. `secret` should connect to `credential` and `pem`, not to `arcanum` and `occult`. A dictionary, applied blind, drags in the wrong sense far more often than it bridges the right one. This is an old and well-documented effect, and reproducing it on my own vocabulary was sobering.
+
+So I stopped taking the dictionary's word for it. Instead of trusting what a lexicographer wrote down, I let the graph redefine the relationships from how the words are actually used in this corpus. Each meaningful term becomes a node carrying a context centroid, which is just the <<_embedding,embedding>> of that term averaged across every place it appears. That centroid is the word's meaning in this corpus, and the relationships drawn from it come out sense-correct by construction:
+
+[cols="1,2,2", options="header"]
+|===
+| Term | What the generic dictionary says | What the corpus graph says
+
+| `cluster` | `flock`, `clump` | `community`, `modular`, `connect`
+| `fuse` | `weld`, `melt` | `rrf`, `fusion`, `reciprocal`, `bm25`
+| `secret` | `arcanum`, `occult` | `credential`, `pem`, `secure`
+| `vector` | `virus` | `embeddingprovider`, `embed`, `bge`
+|===
+
+[.mermaid]
+----
+flowchart LR
+  classDef term fill:#7c3aed,stroke:#5b21b6,color:#ffffff;
+  classDef dict fill:#fee2e2,stroke:#ef4444,color:#7f1d1d;
+  classDef corp fill:#ede9fe,stroke:#7c3aed,color:#4c1d95;
+  vector["vector"]:::term
+  vector -->|dictionary| vv["virus"]:::dict
+  vector -->|corpus| ve["embed"]:::corp
+  vector -->|corpus| vb["bge"]:::corp
+  cluster["cluster"]:::term
+  cluster -->|dictionary| cf["flock"]:::dict
+  cluster -->|corpus| cc["community"]:::corp
+  cluster -->|corpus| cl["louvain"]:::corp
+  secret["secret"]:::term
+  secret -->|dictionary| sa["arcanum"]:::dict
+  secret -->|corpus| sc["credential"]:::corp
+----
+
+[.text-center]
+_The same words, two graphs. The dictionary's sense (red) is wrong for this codebase; the sense the corpus graph derives by counting how words co-occur (violet) is right._
+
+That last diagram is hand-drawn, so here is the real thing. These two are captured straight from the graph artifact, with the actual correlation weights it measured:
+
+image::/figures/vector-neighbourhood.svg[The vector concept node linked to emb, f32, ten, and embeddingprovider with measured correlation weights,role=text-center]
+
+image::/figures/fuse-neighbourhood.svg[The fuse concept node linked to reciprocal, fusion, RRF, and BM25 with measured correlation weights,role=text-center]
+
+[.text-center]
+_The `vector` and `fuse` neighbourhoods pulled directly from Aden's concept graph by a small snapshot tool. The numbers are the measured cosine correlations between context centroids. Nothing here is redrawn: `fuse` lands on `reciprocal`, `fusion`, `rrf`, `bm25`, which is exactly the reciprocal-rank-fusion machinery, not the dictionary's `weld` and `melt`._
+
+The right column is the domain truth, and it was derived by counting, with no model in the loop at query time. This is the part of the bet that felt like it was working, and that feeling is exactly where I had to be most careful.
+
+== The negatives, reported as negatives
+
+The point of a language graph is to improve retrieval, so the only question that matters is whether any of this actually finds the right code. The first answer was a string of honest negatives.
+
+The intuitive use of a relationship graph is query expansion: take the user's search words, add their related words, and search for the bigger set. It does not work. Expanding the query drifts the search away from what the user meant instead of sharpening it, and the extra words drag in noise faster than they add signal. I tried four flavors of expansion early and two more later. All six made things worse or barely moved them. Expansion is simply the wrong mechanism.
+
+A second negative was about measurement itself. I had been scoring every experiment on whether the correct answer landed in the very top position, a strict pass-or-fail. That metric was hiding the whole story. Once I measured where the right answer actually ranked, a real signal appeared underneath the binary miss: the correct result was often sitting at rank ten, not buried and not on top. The lesson there is one this series keeps relearning in different clothes, the same one behind link:/posts/a-green-pipeline-lies/[a green pipeline that lies] and link:/posts/the-empty-context-window/[an empty context window that passed every check]. If you assert the wrong thing, a pass tells you nothing. Measure the thing that actually matters.
+
+Used as a reranker rather than an expander, ordering a shortlist the dense model already produced, the graph relationships finally helped a little. On a small set of hard, synonym-heavy probes it looked like more than a little. That is where the real trap was waiting.
+
+== The evaluation was reading its own answer key
+
+Before building anything further on top of a promising number, I went back to validate it, because a result that good deserved suspicion. It did not survive.
+
+Aden's retrieval test harnesses read the whole store, and the store indexed the project's own test files. Those test files pair each example query with the exact answer it is supposed to retrieve, sitting together in the same record. So the graph I was scoring had quietly learned the query-to-answer association straight out of the answer key. It was being tested on material it had already read the solution to.
+
+[quote]
+____
+The oldest lesson in the playbook, and I still walked into it: measure on a corpus that does not contain the answer key.
+____
+
+[.mermaid]
+----
+flowchart LR
+  classDef bad fill:#fee2e2,stroke:#ef4444,color:#7f1d1d;
+  classDef ok fill:#ede9fe,stroke:#7c3aed,color:#4c1d95;
+  tf["test files:<br/>query + its gold answer<br/>in the same record"] --> store[("indexed into<br/>the store")]
+  store --> learn["the graph learns<br/>query to answer"] --> inflated["score looks great<br/>(it read the key)"]:::bad
+  exclude["exclude the test files"] --> honest["honest score:<br/>a small lift, not a doubling"]:::ok
+----
+
+[.text-center]
+_Why the best number was a lie: the benchmark's own answer key had leaked into the graph that was being scored on it._
+
+Excluding the test files, about thirteen percent of the corpus, gave the honest picture, and it corrected two earlier conclusions at once. The headline reranking result, which had looked like roughly a doubling over the baseline, was mostly the leak. Cleaned up, the same lever was a small lift, not a large one. And a result I had written off as inert, using the dictionary's typed edges, turned out to be the strongest of the graph-based levers once the leak was gone. It had only looked dead because the leaked graph already held the answers and did not need it. Remove the cheating and the honest ranking of the levers rearranges completely.
+
+Then I made the probe set bigger, because every shaky claim so far had come from twelve hand-picked examples. I mined a fresh, larger set of real probes, behind an automatic audit that fails loudly if any probe shares a word with its own answer or points at code that is not in the corpus. On that larger and more representative set, the sober verdict arrived: no graph reranker beat plain dense retrieval. The earlier excitement had been the product of two artifacts stacked on each other, the test leak and a small sample that happened to be exactly where graph relations shine. Reordering a list the dense model already ranks well mostly just demotes good answers, and on a realistic mix the easy cases outnumber the hard tail where a relationship would have helped.
+
+This is the part I most wanted to get on the record. The result that felt best was the one that was wrong, and the only reason I know that is that I stopped to measure it honestly. <<_dogfooding,Pointing the tooling at its own work>> and refusing to trust a flattering number is the whole discipline.
+
+== Where the graph actually pays
+
+Every lever up to this point tried to reorder the dense model's output. The untried idea was to change its input. Instead of reranking what comes back, enrich what goes in.
+
+So I folded each piece of code together with a short gist of its graph neighbors, its callers and callees drawn straight from Aden's own graph, and embedded that combined description. A function is now represented not only by what it does but by its role in the system around it. On the same clean, leak-audited, larger probe set, this was the first automatic mechanic in the entire two days to score above the dense baseline. The lift is modest, on the order of a single probe, and there is no query-side trick or hand-tuning behind it. It is purely the graph improving the representation.
+
+[cols="2,1", options="header"]
+|===
+| Approach | Quality (MRR, higher is better)
+
+| Dense baseline | 0.281
+| Dense, enriched from the graph | 0.305
+| Hand-authored oracle (the ceiling) | 0.443
+|===
+
+[.mermaid]
+----
+flowchart TB
+  classDef bad fill:#fee2e2,stroke:#ef4444,color:#7f1d1d;
+  classDef ok fill:#ede9fe,stroke:#7c3aed,color:#4c1d95;
+  subgraph OUT["Reorder the OUTPUT (every attempt lost)"]
+    direction LR
+    d1["dense results"] --> rk["rerank with the graph"] --> lose["no gain on dense"]:::bad
+  end
+  subgraph IN["Enrich the INPUT (the first win)"]
+    direction LR
+    sym["a symbol + its graph<br/>neighbours (callers, callees)"] --> emb["re-embed together"] --> win["0.305 beats dense 0.281"]:::ok
+  end
+----
+
+[.text-center]
+_The turn that worked: the graph's place is not reordering what dense returns, but enriching what dense embeds in the first place._
+
+What makes that small number encouraging rather than disappointing is how sparse the graph was when it produced it: only a few neighbors per node. A denser graph, with the typed and directed structure I am still building toward, has far more context to fold in. So I read the enriched score as a floor, not a ceiling.
+
+The arc resolves into a claim I did not hold at the start of the week. Post-processing a dense model's output with a graph is a dead end. Improving what the model embeds in the first place is where the graph pays. Aden's edge was never going to be out-ranking a strong neural model after the fact. Its edge is structure: blast radius, traversal, typed relations, and now the representation itself. That is exactly where link:/posts/six-live-edges/[the graph was always strongest], and the detour through reranking was worth it because it is how I learned which side of the pipeline the graph belongs on.
+
+== What is still open
+
+I will not pretend this is finished, because it is not. The honest state of the research is that one direction now looks right and a lot of work sits in front of it.
+
+The graph today is untyped and undirected. It captures that two words feel related here, but not the structure of how. A sparrow is a kind of bird and not the reverse, and a similarity edge cannot say so. Adding that typed, directed structure is the next real lever, and the prerequisite under it is splitting words by sense rather than by spelling, because `work` the noun and `work` the verb cannot share a node without poisoning every edge that touches it. I built a first version of the directed structure, read the edges it produced, and found them wrong for precisely that reason, which turned a planned feature into a measured finding about what has to come first.
+
+The measurements themselves are still on thin ice. The differences I am chasing are often one probe wide, which means a bigger and more varied probe set, ideally a second corpus entirely, is what turns "this looks directional" into "this is real." And the gap between every automatic method and the hand-authored ceiling is domain knowledge that no generic technique derives on its own. Closing it, if it closes, is the long arc.
+
+That is the work. I am compiling and completing it in the open, and I will post the updates here as they land, including the ones that walk back something I said today.
+
+== Update: the main result did not survive the next day
+
+True to that warning, the best number in this post fell over when I measured more carefully. I am leaving the text above exactly as it was written and recording the correction here, because the walk-back is the whole point of working in the open.
+
+[IMPORTANT]
+.What changed
+====
+The doc-side win was mostly an artifact of a noisy baseline. My retrieval harness embedded each piece of code along with volatile bookkeeping attributes (byte offsets, line numbers, a content hash) that Aden's production path strips before it ever embeds anything. I was feeding the model noise that production never sees, which made the dense baseline look weaker than it really is. Measured against the faithful production projection, Aden's real dense baseline is around 0.36 to 0.40, not the 0.28 I kept quoting. On that clean baseline, the graph-enriched embedding no longer beats dense by more than noise. The "first automatic win" was largely compensating for my own harness.
+====
+
+Two further findings reframed the retrieval question entirely:
+
+* *Sequence length, not graph cleverness, was the dominant lever.* Aden capped every card at 128 tokens. Lifting that cap moved dense more than any graph trick did, and quality peaks around 256 tokens before longer windows start diluting the signal. The biggest retrieval gain on the table was fixing the ruler, not the rearranger.
+* *The graph's real, validated edge is structure, not retrieval.* I built a ground-truth check for <<_blast_radius,blast radius>>, the "what breaks if I change this" question, against a parser-independent scan of the source. On production code the graph's incoming-call edges scored precision 0.99 and recall 0.98. A dense embedder cannot answer that question at all, at any score.
+
+So the honest resolution is sharper than the one this post reached, and it bends back toward where the post was already pointing. Aden's edge was never going to be out-ranking a strong dense model, not by reranking its output and not by enriching its input. The edge is the structure: the typed edges, the <<_impact_analysis,impact analysis>>, the blast radius that a vector fundamentally cannot compute. The retrieval detour was still worth it. It produced a leak-audited, baseline-faithful way to measure, and it ruled out the wrong answers cleanly enough to make the right one obvious. The fuller account is in the link:/devlog/2026-06-18/[devlog for 2026-06-18], which ran well past where this story was first drawn.
+
+== Update: route by domain (2026-06-19)
+
+The dictionary question this post opened with finally resolved, and the answer is not the one in the title. The dictionary was never useless. It was being asked to do the corpus's job.
+
+The fix was to stop testing it on code. On a neutral prose corpus, with 42 probes built so the query word never appears in the target article, a keyword baseline bridges 1 of 42 and Open English WordNet expansion bridges 41. <<_dense_retrieval,Dense>> alone catches only 20, so on prose the dictionary is complementary to the neural model, not redundant. On code the opposite holds: the corpus's own co-occurrence structure (<<_ppmi,PPMI>>) lifts retrieval, and adding any dictionary on top dilutes it. The greedy move of merging every dictionary I could ship, starting with Moby's 1.85 million edges, earned no vote over the careful smaller one. So the rule is to route by domain, and the two levers now auto-gate into one funnel that reads the query and picks for itself.
+
+The durable edge is still what this post landed on: structure, not retrieval. The full resolution, with the dual substrate and the auto-gate, is in link:/posts/two-graphs-one-funnel/[Two Graphs, One Funnel] and the link:/devlog/2026-06-19/[devlog for 2026-06-19].
+
+[.text-center]
+_This post is drawn from two raw development days: the link:/devlog/2026-06-17/[devlog for 2026-06-17] and the link:/devlog/2026-06-18/[devlog for 2026-06-18], both on the link:/devlog/[Aden timeline]. More in the link:/series/aden/[Aden series]: the connections below are compiled from this blog's own knowledge graph._
+
+[.sources]
+== Sources
+
+. Aden source: the https://github.com/RioPlay/aden[Aden repository^], specifically `crates/aden-cli/tests/lexicon_routing_ab.rs` (the synonym-mismatch routing gate and its grounded corpus expansion), `crates/aden-cli/tests/compound_ab.rs` (corpus-derived PPMI relationships measured against the dictionary), `crates/aden-cli/tests/build_lexicon_store.rs` (the lexicon built into its own store), and `scripts/oewn_to_triples.py` (the dictionary-to-typed-edge extraction). The `SynonymOf`, `IsA`, `PartOf`, and `AntonymOf` edge types are first-class in `aden-core`.
+. Open English WordNet, the openly licensed (CC BY 4.0) descendant of Princeton's https://wordnet.princeton.edu/[WordNet^], used here as the generic dictionary the corpus graph is measured against: https://en-word.net/[en-word.net^].
+. The link:/glossary/[site glossary] defines and sources every term used above. This site is built with https://asciidoctor.org[Asciidoctor^].

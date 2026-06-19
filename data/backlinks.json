@@ -1,4 +1,12 @@
 {
+  "/about/": {
+    "related": [
+      {
+        "title": "Introducing Aden: giving coding agents a map of the codebase",
+        "url": "/posts/introducing-aden/"
+      }
+    ]
+  },
   "/devlog/2026-06-02/": {
     "referenced_by": [
       {
@@ -61,11 +69,97 @@
       }
     ]
   },
+  "/devlog/2026-06-17/": {
+    "referenced_by": [
+      {
+        "title": "Don't Take the Dictionary's Word for It",
+        "url": "/posts/dont-take-the-dictionarys-word-for-it/"
+      },
+      {
+        "title": "Two Graphs, One Funnel",
+        "url": "/posts/two-graphs-one-funnel/"
+      }
+    ]
+  },
+  "/devlog/2026-06-18/": {
+    "referenced_by": [
+      {
+        "title": "Don't Take the Dictionary's Word for It",
+        "url": "/posts/dont-take-the-dictionarys-word-for-it/"
+      },
+      {
+        "title": "Two Graphs, One Funnel",
+        "url": "/posts/two-graphs-one-funnel/"
+      }
+    ]
+  },
+  "/devlog/2026-06-19/": {
+    "referenced_by": [
+      {
+        "title": "Don't Take the Dictionary's Word for It",
+        "url": "/posts/dont-take-the-dictionarys-word-for-it/"
+      },
+      {
+        "title": "Two Graphs, One Funnel",
+        "url": "/posts/two-graphs-one-funnel/"
+      }
+    ]
+  },
   "/glossary/": {
+    "referenced_by": [
+      {
+        "title": "About",
+        "url": "/about/"
+      },
+      {
+        "title": "A Green Pipeline Lies",
+        "url": "/posts/a-green-pipeline-lies/"
+      },
+      {
+        "title": "Don't Take the Dictionary's Word for It",
+        "url": "/posts/dont-take-the-dictionarys-word-for-it/"
+      },
+      {
+        "title": "Introducing Aden: giving coding agents a map of the codebase",
+        "url": "/posts/introducing-aden/"
+      },
+      {
+        "title": "Prose Joins the Graph",
+        "url": "/posts/prose-joins-the-graph/"
+      },
+      {
+        "title": "Six Live Edges",
+        "url": "/posts/six-live-edges/"
+      },
+      {
+        "title": "The Empty Context Window",
+        "url": "/posts/the-empty-context-window/"
+      },
+      {
+        "title": "The Shape the Graph Already Had",
+        "url": "/posts/the-shape-the-graph-already-had/"
+      },
+      {
+        "title": "Two Graphs, One Funnel",
+        "url": "/posts/two-graphs-one-funnel/"
+      },
+      {
+        "title": "What Survives Regeneration",
+        "url": "/posts/what-survives-regeneration/"
+      },
+      {
+        "title": "What You're About to Break",
+        "url": "/posts/what-youre-about-to-break/"
+      }
+    ],
     "related": [
       {
         "title": "A Green Pipeline Lies",
         "url": "/posts/a-green-pipeline-lies/"
+      },
+      {
+        "title": "Don't Take the Dictionary's Word for It",
+        "url": "/posts/dont-take-the-dictionarys-word-for-it/"
       },
       {
         "title": "Introducing Aden: giving coding agents a map of the codebase",
@@ -86,6 +180,10 @@
       {
         "title": "The Graph That Audited Itself",
         "url": "/posts/the-graph-that-audited-itself/"
+      },
+      {
+        "title": "Two Graphs, One Funnel",
+        "url": "/posts/two-graphs-one-funnel/"
       }
     ],
     "terms": {
@@ -119,6 +217,10 @@
         "term": "Blast radius",
         "used_in": [
           {
+            "title": "Don't Take the Dictionary's Word for It",
+            "url": "/posts/dont-take-the-dictionarys-word-for-it/"
+          },
+          {
             "title": "Introducing Aden: giving coding agents a map of the codebase",
             "url": "/posts/introducing-aden/"
           },
@@ -129,6 +231,10 @@
           {
             "title": "Six Live Edges",
             "url": "/posts/six-live-edges/"
+          },
+          {
+            "title": "Two Graphs, One Funnel",
+            "url": "/posts/two-graphs-one-funnel/"
           },
           {
             "title": "What Survives Regeneration",
@@ -192,8 +298,16 @@
         "term": "Dense retrieval",
         "used_in": [
           {
+            "title": "Don't Take the Dictionary's Word for It",
+            "url": "/posts/dont-take-the-dictionarys-word-for-it/"
+          },
+          {
             "title": "Introducing Aden: giving coding agents a map of the codebase",
             "url": "/posts/introducing-aden/"
+          },
+          {
+            "title": "Two Graphs, One Funnel",
+            "url": "/posts/two-graphs-one-funnel/"
           }
         ]
       },
@@ -212,6 +326,10 @@
           {
             "title": "A Green Pipeline Lies",
             "url": "/posts/a-green-pipeline-lies/"
+          },
+          {
+            "title": "Don't Take the Dictionary's Word for It",
+            "url": "/posts/dont-take-the-dictionarys-word-for-it/"
           }
         ]
       },
@@ -224,6 +342,15 @@
           }
         ]
       },
+      "_embedding": {
+        "term": "Embedding",
+        "used_in": [
+          {
+            "title": "Don't Take the Dictionary's Word for It",
+            "url": "/posts/dont-take-the-dictionarys-word-for-it/"
+          }
+        ]
+      },
       "_hybrid_retrieval": {
         "term": "Hybrid retrieval",
         "used_in": [
@@ -233,12 +360,29 @@
           }
         ]
       },
+      "_impact_analysis": {
+        "term": "Impact analysis",
+        "used_in": [
+          {
+            "title": "Don't Take the Dictionary's Word for It",
+            "url": "/posts/dont-take-the-dictionarys-word-for-it/"
+          },
+          {
+            "title": "Two Graphs, One Funnel",
+            "url": "/posts/two-graphs-one-funnel/"
+          }
+        ]
+      },
       "_knowledge_graph": {
         "term": "Knowledge graph",
         "used_in": [
           {
             "title": "A Green Pipeline Lies",
             "url": "/posts/a-green-pipeline-lies/"
+          },
+          {
+            "title": "Don't Take the Dictionary's Word for It",
+            "url": "/posts/dont-take-the-dictionarys-word-for-it/"
           },
           {
             "title": "Introducing Aden: giving coding agents a map of the codebase",
@@ -272,6 +416,37 @@
           {
             "title": "What You're About to Break",
             "url": "/posts/what-youre-about-to-break/"
+          }
+        ]
+      },
+      "_ppmi": {
+        "term": "PPMI (Pointwise Mutual Information)",
+        "used_in": [
+          {
+            "title": "Don't Take the Dictionary's Word for It",
+            "url": "/posts/dont-take-the-dictionarys-word-for-it/"
+          },
+          {
+            "title": "Two Graphs, One Funnel",
+            "url": "/posts/two-graphs-one-funnel/"
+          }
+        ]
+      },
+      "_provenance": {
+        "term": "Provenance (per-edge source)",
+        "used_in": [
+          {
+            "title": "Two Graphs, One Funnel",
+            "url": "/posts/two-graphs-one-funnel/"
+          }
+        ]
+      },
+      "_referential_context_compiler": {
+        "term": "Referential context compiler",
+        "used_in": [
+          {
+            "title": "Don't Take the Dictionary's Word for It",
+            "url": "/posts/dont-take-the-dictionarys-word-for-it/"
           }
         ]
       },
@@ -314,6 +489,10 @@
         "term": "Typed edge",
         "used_in": [
           {
+            "title": "Don't Take the Dictionary's Word for It",
+            "url": "/posts/dont-take-the-dictionarys-word-for-it/"
+          },
+          {
             "title": "Introducing Aden: giving coding agents a map of the codebase",
             "url": "/posts/introducing-aden/"
           },
@@ -324,6 +503,10 @@
           {
             "title": "Six Live Edges",
             "url": "/posts/six-live-edges/"
+          },
+          {
+            "title": "Two Graphs, One Funnel",
+            "url": "/posts/two-graphs-one-funnel/"
           },
           {
             "title": "What You're About to Break",
@@ -356,6 +539,10 @@
       {
         "title": "Glossary",
         "url": "/glossary/"
+      },
+      {
+        "title": "Don't Take the Dictionary's Word for It",
+        "url": "/posts/dont-take-the-dictionarys-word-for-it/"
       }
     ],
     "related": [
@@ -374,6 +561,90 @@
       {
         "title": "The Graph That Audited Itself",
         "url": "/posts/the-graph-that-audited-itself/"
+      }
+    ]
+  },
+  "/posts/dont-take-the-dictionarys-word-for-it/": {
+    "concepts": [
+      {
+        "term": "Blast radius",
+        "url": "/glossary/#_blast_radius"
+      },
+      {
+        "term": "Dense retrieval",
+        "url": "/glossary/#_dense_retrieval"
+      },
+      {
+        "term": "Dogfooding",
+        "url": "/glossary/#_dogfooding"
+      },
+      {
+        "term": "Embedding",
+        "url": "/glossary/#_embedding"
+      },
+      {
+        "term": "Impact analysis",
+        "url": "/glossary/#_impact_analysis"
+      },
+      {
+        "term": "Knowledge graph",
+        "url": "/glossary/#_knowledge_graph"
+      },
+      {
+        "term": "PPMI (Pointwise Mutual Information)",
+        "url": "/glossary/#_ppmi"
+      },
+      {
+        "term": "Referential context compiler",
+        "url": "/glossary/#_referential_context_compiler"
+      },
+      {
+        "term": "Typed edge",
+        "url": "/glossary/#_typed_edge"
+      }
+    ],
+    "referenced_by": [
+      {
+        "title": "Glossary",
+        "url": "/glossary/"
+      },
+      {
+        "title": "Two Graphs, One Funnel",
+        "url": "/posts/two-graphs-one-funnel/"
+      }
+    ],
+    "related": [
+      {
+        "title": "Devlog: 2026-06-17",
+        "url": "/devlog/2026-06-17/"
+      },
+      {
+        "title": "Devlog: 2026-06-18",
+        "url": "/devlog/2026-06-18/"
+      },
+      {
+        "title": "Devlog: 2026-06-19",
+        "url": "/devlog/2026-06-19/"
+      },
+      {
+        "title": "A Green Pipeline Lies",
+        "url": "/posts/a-green-pipeline-lies/"
+      },
+      {
+        "title": "Introducing Aden: giving coding agents a map of the codebase",
+        "url": "/posts/introducing-aden/"
+      },
+      {
+        "title": "Six Live Edges",
+        "url": "/posts/six-live-edges/"
+      },
+      {
+        "title": "The Empty Context Window",
+        "url": "/posts/the-empty-context-window/"
+      },
+      {
+        "title": "Two Graphs, One Funnel",
+        "url": "/posts/two-graphs-one-funnel/"
       }
     ]
   },
@@ -422,12 +693,20 @@
     ],
     "referenced_by": [
       {
+        "title": "About",
+        "url": "/about/"
+      },
+      {
         "title": "Glossary",
         "url": "/glossary/"
       },
       {
         "title": "A Green Pipeline Lies",
         "url": "/posts/a-green-pipeline-lies/"
+      },
+      {
+        "title": "Don't Take the Dictionary's Word for It",
+        "url": "/posts/dont-take-the-dictionarys-word-for-it/"
       },
       {
         "title": "Prose Joins the Graph",
@@ -492,6 +771,10 @@
         "url": "/glossary/"
       },
       {
+        "title": "Don't Take the Dictionary's Word for It",
+        "url": "/posts/dont-take-the-dictionarys-word-for-it/"
+      },
+      {
         "title": "Prose Joins the Graph",
         "url": "/posts/prose-joins-the-graph/"
       },
@@ -502,6 +785,10 @@
       {
         "title": "The Graph That Audited Itself",
         "url": "/posts/the-graph-that-audited-itself/"
+      },
+      {
+        "title": "Two Graphs, One Funnel",
+        "url": "/posts/two-graphs-one-funnel/"
       },
       {
         "title": "What You're About to Break",
@@ -550,6 +837,10 @@
       {
         "title": "A Green Pipeline Lies",
         "url": "/posts/a-green-pipeline-lies/"
+      },
+      {
+        "title": "Don't Take the Dictionary's Word for It",
+        "url": "/posts/dont-take-the-dictionarys-word-for-it/"
       },
       {
         "title": "The Shape the Graph Already Had",
@@ -650,6 +941,66 @@
       {
         "title": "What You're About to Break",
         "url": "/posts/what-youre-about-to-break/"
+      }
+    ]
+  },
+  "/posts/two-graphs-one-funnel/": {
+    "concepts": [
+      {
+        "term": "Blast radius",
+        "url": "/glossary/#_blast_radius"
+      },
+      {
+        "term": "Dense retrieval",
+        "url": "/glossary/#_dense_retrieval"
+      },
+      {
+        "term": "Impact analysis",
+        "url": "/glossary/#_impact_analysis"
+      },
+      {
+        "term": "PPMI (Pointwise Mutual Information)",
+        "url": "/glossary/#_ppmi"
+      },
+      {
+        "term": "Provenance (per-edge source)",
+        "url": "/glossary/#_provenance"
+      },
+      {
+        "term": "Typed edge",
+        "url": "/glossary/#_typed_edge"
+      }
+    ],
+    "referenced_by": [
+      {
+        "title": "Glossary",
+        "url": "/glossary/"
+      },
+      {
+        "title": "Don't Take the Dictionary's Word for It",
+        "url": "/posts/dont-take-the-dictionarys-word-for-it/"
+      }
+    ],
+    "related": [
+      {
+        "title": "Devlog: 2026-06-17",
+        "url": "/devlog/2026-06-17/"
+      },
+      {
+        "title": "Devlog: 2026-06-18",
+        "url": "/devlog/2026-06-18/"
+      },
+      {
+        "title": "Devlog: 2026-06-19",
+        "url": "/devlog/2026-06-19/"
+      },
+      {
+        "title": "Don't Take the Dictionary's Word for It",
+        "url": "/posts/dont-take-the-dictionarys-word-for-it/"
+      },
+      {
+        "title": "Six Live Edges",
+        "url": "/posts/six-live-edges/"
       }
     ]
   },
